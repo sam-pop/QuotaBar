@@ -59,13 +59,19 @@ enum OAuthEndpoints {
 
 extension PendingLogin {
     /// Builds the authorize URL for this login attempt. `loginHintEmail` should be
-    /// supplied only when re-authing a known account, to preselect it; otherwise omit
-    /// it so the user picks an account themselves.
+    /// supplied only when re-authing a known Anthropic account, to preselect it; OpenAI
+    /// logins ignore it (untested against that server, and it would put an email in the URL).
     ///
     /// Never log or print the returned URL: it carries `login_hint` (a real email
     /// address) and the PKCE code challenge.
     func authorizeURL(loginHintEmail: String?) -> URL {
-        var comps = URLComponents(string: OAuthEndpoints.authorize)!
+        switch provider {
+        case .anthropic: return anthropicAuthorizeURL(loginHintEmail: loginHintEmail)
+        case .openai: return openAIAuthorizeURL()
+        }
+    }
+
+    private func anthropicAuthorizeURL(loginHintEmail: String?) -> URL {
         var items = [
             // Included because our Phase-0 spike sent it in the request that returned
             // HTTP 200; we did not test the flow without it, so it stays. Not observed in
@@ -82,12 +88,32 @@ extension PendingLogin {
         if let loginHintEmail {
             items.append(URLQueryItem(name: "login_hint", value: loginHintEmail))
         }
-        // `URLQueryItem`/`URLComponents.queryItems` leaves characters that are legal
-        // in a query component (like `:`, `/`, and `+`) un-escaped. The server
-        // form-decodes `+` as a space, so a plus-addressed email in `login_hint`
-        // would arrive corrupted. Encode every value to unreserved characters only,
-        // matching the fully percent-encoded form our spike proved the server
-        // accepts.
+        return Self.url(base: OAuthEndpoints.authorize, items: items)
+    }
+
+    /// The exact parameter set the design spike sent and the server accepted (spec §2 O2c).
+    private func openAIAuthorizeURL() -> URL {
+        Self.url(base: OpenAIOAuthEndpoints.authorize, items: [
+            URLQueryItem(name: "response_type", value: "code"),
+            URLQueryItem(name: "client_id", value: OpenAIOAuthEndpoints.clientID),
+            URLQueryItem(name: "redirect_uri", value: redirectURI),
+            URLQueryItem(name: "scope", value: OpenAIOAuthEndpoints.scope),
+            URLQueryItem(name: "code_challenge", value: pkce.challenge),
+            URLQueryItem(name: "code_challenge_method", value: "S256"),
+            URLQueryItem(name: "state", value: pkce.state),
+            URLQueryItem(name: "id_token_add_organizations", value: "true"),
+            URLQueryItem(name: "codex_cli_simplified_flow", value: "true"),
+            URLQueryItem(name: "originator", value: OpenAIOAuthEndpoints.originator),
+        ])
+    }
+
+    /// `URLQueryItem`/`URLComponents.queryItems` leaves characters that are legal in a
+    /// query component (like `:`, `/`, and `+`) un-escaped. The server form-decodes `+` as a
+    /// space, so a plus-addressed email in `login_hint` would arrive corrupted. Encode every
+    /// value to unreserved characters only, matching the fully percent-encoded form our
+    /// spike proved the Anthropic server accepts.
+    private static func url(base: String, items: [URLQueryItem]) -> URL {
+        var comps = URLComponents(string: base)!
         let unreserved = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))
         comps.percentEncodedQueryItems = items.map {
             URLQueryItem(name: $0.name, value: $0.value?.addingPercentEncoding(withAllowedCharacters: unreserved))
