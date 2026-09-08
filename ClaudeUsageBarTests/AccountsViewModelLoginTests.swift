@@ -36,9 +36,16 @@ struct AccountsViewModelLoginTests {
 
     private func makeDeps(calls: Calls, legacyCredentials: CachedCredentials?) -> AccountsViewModel.Dependencies {
         AccountsViewModel.Dependencies(
-            beginLogin: { _, _, _ in throw OAuthLoginError.transient },
-            exchange: { _, _ in throw OAuthLoginError.transient },
-            fetchIdentity: { _ in AccountIdentity(uuid: "u", email: "e", displayName: "d") },
+            adapters: ProviderAdapters(
+                anthropic: ProviderAdapter(
+                    provider: .anthropic,
+                    supportsPaste: true,
+                    beginLogin: { _, _, _ in throw OAuthLoginError.transient },
+                    exchange: { _, _ in throw OAuthLoginError.transient },
+                    fetchIdentity: { _ in AccountIdentity(uuid: "u", email: "e", displayName: "d") },
+                    fetchUsage: { _ in throw StubError() },
+                    refreshToken: { _ in throw StubError() }),
+                openai: .unavailable(.openai)),
             openURL: { _ in },
             now: { Date(timeIntervalSince1970: 0) },
             resolveLegacyCredentials: {
@@ -47,9 +54,7 @@ struct AccountsViewModelLoginTests {
             },
             deleteLegacyArtifacts: { calls.delete += 1 },
             requestNotificationAuthorization: { nil },
-            addNotification: { _ in },
-            fetchUsage: { _ in throw StubError() },
-            refreshToken: { _ in throw StubError() })
+            addNotification: { _ in })
     }
 
     @Test("No legacy credentials: init routes through the seam, deletes nothing, attaches no accounts")
@@ -105,7 +110,7 @@ struct AccountsViewModelLoginTests {
         ])
 
         var deps = makeDeps(calls: calls, legacyCredentials: nil)
-        deps.fetchUsage = { _ in
+        deps.adapters.anthropic.fetchUsage = { _ in
             calls.fetchUsage += 1
             return UsageResponse(
                 fiveHour: UsagePeriod(utilization: 10, resetsAt: "2026-07-09T18:30:00Z"),
@@ -141,7 +146,7 @@ struct AccountsViewModelLoginTests {
 
         var deps = makeDeps(calls: calls, legacyCredentials: nil)
         deps.addNotification = { calls.notifications.append($0) }
-        deps.fetchUsage = { _ in
+        deps.adapters.anthropic.fetchUsage = { _ in
             UsageResponse(
                 fiveHour: UsagePeriod(utilization: 10, resetsAt: "2026-07-09T18:30:00Z"),
                 sevenDay: UsagePeriod(utilization: 10, resetsAt: "2026-07-16T00:00:00Z"))
@@ -227,40 +232,45 @@ struct AccountsViewModelBrowserLoginTests {
 
     private func makeDeps(_ script: Script) -> AccountsViewModel.Dependencies {
         AccountsViewModel.Dependencies(
-            beginLogin: { accountID, forcePaste, hint in
-                script.beginCalls.append((accountID, forcePaste, hint))
-                if let error = script.beginError { throw error }
-                let paste = forcePaste || script.beginPaste
-                let pending = PendingLogin(
-                    accountID: accountID,
-                    mode: paste ? .paste : .loopback(port: 49152),
-                    pkce: script.pkce,
-                    redirectURI: paste ? OAuthEndpoints.pasteRedirect : "http://127.0.0.1:49152/callback",
-                    startedAt: Date(timeIntervalSince1970: 0))
-                // Stand-in for the authorize URL; the real one is built by `OAuthLoginService`.
-                let url = URL(string: "https://claude.ai/oauth/authorize")!
-                guard !paste || script.pasteYieldsCallback else { return (pending, url, nil, nil) }
-                let code = script.callbackCode
-                let delay = script.callbackDelay
-                let callback = Task<String?, Never> {
-                    if delay > .zero { try? await Task.sleep(for: delay) }
-                    return code
-                }
-                return (pending, url, nil, callback)
-            },
-            exchange: { _, _ in try script.nextExchange() },
-            fetchIdentity: { _ in try script.nextIdentity() },
+            adapters: ProviderAdapters(
+                anthropic: ProviderAdapter(
+                    provider: .anthropic,
+                    supportsPaste: true,
+                    beginLogin: { accountID, forcePaste, hint in
+                        script.beginCalls.append((accountID, forcePaste, hint))
+                        if let error = script.beginError { throw error }
+                        let paste = forcePaste || script.beginPaste
+                        let pending = PendingLogin(
+                            accountID: accountID,
+                            mode: paste ? .paste : .loopback(port: 49152),
+                            pkce: script.pkce,
+                            redirectURI: paste ? OAuthEndpoints.pasteRedirect : "http://127.0.0.1:49152/callback",
+                            startedAt: Date(timeIntervalSince1970: 0))
+                        // Stand-in for the authorize URL; the real one is built by `OAuthLoginService`.
+                        let url = URL(string: "https://claude.ai/oauth/authorize")!
+                        guard !paste || script.pasteYieldsCallback else { return (pending, url, nil, nil) }
+                        let code = script.callbackCode
+                        let delay = script.callbackDelay
+                        let callback = Task<String?, Never> {
+                            if delay > .zero { try? await Task.sleep(for: delay) }
+                            return code
+                        }
+                        return (pending, url, nil, callback)
+                    },
+                    exchange: { _, _ in try script.nextExchange() },
+                    fetchIdentity: { _ in try script.nextIdentity() },
+                    fetchUsage: { token in
+                        script.usageTokens.append(token)
+                        return try script.usageResult.get()
+                    },
+                    refreshToken: { _ in throw StubError() }),
+                openai: .unavailable(.openai)),
             openURL: { _ in script.openedCount += 1 },
             now: { Date(timeIntervalSince1970: 0) },
             resolveLegacyCredentials: { nil },
             deleteLegacyArtifacts: {},
             requestNotificationAuthorization: { nil },
-            addNotification: { script.notifications.append($0) },
-            fetchUsage: { token in
-                script.usageTokens.append(token)
-                return try script.usageResult.get()
-            },
-            refreshToken: { _ in throw StubError() })
+            addNotification: { script.notifications.append($0) })
     }
 
     private func makeVM(
@@ -469,7 +479,7 @@ struct AccountsViewModelBrowserLoginTests {
         // the wait is already armed as a Task before `beginLogin` ever sees it.
         var deps = makeDeps(script)
         let pkce = script.pkce
-        deps.beginLogin = { accountID, _, _ in
+        deps.adapters.anthropic.beginLogin = { accountID, _, _ in
             script.beginCalls.append((accountID, false, nil))
             let pending = PendingLogin(
                 accountID: accountID, mode: .loopback(port: port), pkce: pkce,
@@ -581,7 +591,7 @@ struct AccountsViewModelBrowserLoginTests {
         var deps = makeDeps(script)
         let pkce = script.pkce
         let url = URL(string: "https://claude.ai/oauth/authorize")!
-        deps.beginLogin = { accountID, forcePaste, _ in
+        deps.adapters.anthropic.beginLogin = { accountID, forcePaste, _ in
             script.beginCalls.append((accountID, forcePaste, nil))
             guard !forcePaste else {
                 let pending = PendingLogin(

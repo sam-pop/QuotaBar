@@ -59,10 +59,9 @@ final class AccountsViewModel: ObservableObject {
     /// identity lookups, usage fetch and token refresh, notification authorization and
     /// posting, the legacy migration's keychain/filesystem calls, and the clock.
     struct Dependencies: Sendable {
-        var beginLogin: @Sendable (_ accountID: UUID?, _ forcePaste: Bool, _ loginHintEmail: String?) async throws
-            -> (pending: PendingLogin, authorizeURL: URL, server: LoopbackServer?, callback: Task<String?, Never>?)
-        var exchange: @Sendable (_ code: String, _ pending: PendingLogin) async throws -> CachedCredentials
-        var fetchIdentity: @Sendable (_ token: String) async throws -> AccountIdentity
+        /// One adapter per provider: browser login, code exchange, identity, usage, and
+        /// token refresh. The coordinator picks by `Account.provider`.
+        var adapters: ProviderAdapters
         var openURL: @Sendable (URL) -> Void
         var now: @Sendable () -> Date
         /// Reads the legacy single-account credentials for the one-time `AccountMigration`
@@ -82,14 +81,6 @@ final class AccountsViewModel: ObservableObject {
         /// the real `UNUserNotificationCenter` — recording the call (or doing nothing) is
         /// the point.
         var addNotification: @Sendable (UNNotificationRequest) -> Void
-        /// Fetches usage for one account's access token. Threaded into every attached
-        /// `AccountRuntime.Dependencies` so a test controls it instead of hitting the
-        /// real API.
-        var fetchUsage: @Sendable (_ token: String) async throws -> UsageResponse
-        /// Refreshes one account's OAuth token. Threaded into every attached
-        /// `AccountRuntime.Dependencies` so a test controls it instead of hitting the
-        /// real API.
-        var refreshToken: @Sendable (_ credentials: CachedCredentials) async throws -> CachedCredentials
 
         /// Wires the real `OAuthLoginService`, `ProfileService`, `NSWorkspace` browser
         /// opener, `UsageAPIService`/`KeychainService` usage-refresh calls, notification
@@ -98,16 +89,10 @@ final class AccountsViewModel: ObservableObject {
         /// until the view model calls one, so constructing `.live` performs no I/O.
         static var live: Dependencies {
             Dependencies(
-                beginLogin: { accountID, forcePaste, loginHintEmail in
-                    try await OAuthLoginService().begin(
-                        accountID: accountID, forcePaste: forcePaste, loginHintEmail: loginHintEmail)
-                },
-                exchange: { code, pending in
-                    try await OAuthLoginService().exchange(code: code, pending: pending)
-                },
-                fetchIdentity: { token in
-                    try await ProfileService.fetchIdentity(token: token)
-                },
+                adapters: ProviderAdapters(
+                    anthropic: AnthropicProvider.adapter,
+                    // Replaced by the real OpenAI adapter once its login service exists.
+                    openai: .unavailable(.openai)),
                 openURL: { url in
                     NSWorkspace.shared.open(url)
                 },
@@ -123,14 +108,7 @@ final class AccountsViewModel: ObservableObject {
                     let settings = await center.notificationSettings()
                     return settings.authorizationStatus == .authorized
                 },
-                addNotification: { UNUserNotificationCenter.current().add($0) },
-                fetchUsage: { try await UsageAPIService.fetch(token: $0) },
-                refreshToken: { creds in
-                    guard let refreshToken = creds.refreshToken else {
-                        throw KeychainServiceError.noRefreshToken
-                    }
-                    return try await KeychainService.performOAuthRefresh(refreshToken: refreshToken)
-                }
+                addNotification: { UNUserNotificationCenter.current().add($0) }
             )
         }
     }
@@ -238,9 +216,10 @@ final class AccountsViewModel: ObservableObject {
 
     private func attachRuntime(for account: Account) {
         let id = account.id
+        let adapter = deps.adapters.adapter(for: account.provider)
         let runtimeDeps = AccountRuntime.Dependencies(
-            fetchUsage: deps.fetchUsage,
-            refreshToken: deps.refreshToken,
+            fetchUsage: adapter.fetchUsage,
+            refreshToken: adapter.refreshToken,
             now: deps.now,
             onThresholdCrossing: { [weak self] crossing in
                 self?.sendNotification(account: account, crossing: crossing)
@@ -283,8 +262,10 @@ final class AccountsViewModel: ObservableObject {
 
     private func backfillIdentity(_ id: UUID) async {
         defer { identityBackfillInFlight.remove(id) }
-        guard let token = try? credentials.credentials(for: id)?.accessToken,
-              let identity = try? await deps.fetchIdentity(token) else { return }
+        guard let account = accounts.first(where: { $0.id == id }),
+              let token = try? credentials.credentials(for: id)?.accessToken,
+              let identity = try? await deps.adapters.adapter(for: account.provider).fetchIdentity(token)
+        else { return }
 
         let result = AccountIdentityResolver.backfill(accounts, id: id,
                                                       uuid: identity.uuid, email: identity.email)
@@ -308,7 +289,7 @@ final class AccountsViewModel: ObservableObject {
     /// rechecks after, so a login that was cancelled or restarted mid-flight can't write
     /// state on top of the one that replaced it.
     private var loginEpoch = 0
-    /// True between `deps.beginLogin` being called and `pendingLogin` being assigned — the
+    /// True between the adapter's `beginLogin` being called and `pendingLogin` being assigned — the
     /// window in which `pendingLogin` alone would let a second login start.
     private var isStartingLogin = false
 
@@ -417,7 +398,8 @@ final class AccountsViewModel: ObservableObject {
         let started: (pending: PendingLogin, authorizeURL: URL,
                       server: LoopbackServer?, callback: Task<String?, Never>?)
         do {
-            started = try await deps.beginLogin(accountID, forcePaste, loginHintEmail(for: accountID))
+            started = try await deps.adapters.adapter(for: loginProvider(for: accountID))
+                .beginLogin(accountID, forcePaste, loginHintEmail(for: accountID))
             isStartingLogin = false
         } catch {
             isStartingLogin = false
@@ -522,10 +504,11 @@ final class AccountsViewModel: ObservableObject {
     /// One retry on `.transient`, which covers transport failures (offline, timeout, DNS)
     /// and any unexpected status, since the exchange classifier fails open to it.
     private func exchangeRetryingTransient(code: String, pending: PendingLogin) async throws -> CachedCredentials {
+        let adapter = deps.adapters.adapter(for: pending.provider)
         do {
-            return try await deps.exchange(code, pending)
+            return try await adapter.exchange(code, pending)
         } catch OAuthLoginError.transient {
-            return try await deps.exchange(code, pending)
+            return try await adapter.exchange(code, pending)
         }
     }
 
@@ -536,7 +519,7 @@ final class AccountsViewModel: ObservableObject {
         let epoch = loginEpoch
         let identity: AccountIdentity
         do {
-            identity = try await deps.fetchIdentity(grant.accessToken)
+            identity = try await deps.adapters.adapter(for: pending.provider).fetchIdentity(grant.accessToken)
         } catch {
             guard epoch == loginEpoch else { return }
             guard !isCancellation(error) else {
@@ -695,6 +678,15 @@ final class AccountsViewModel: ObservableObject {
 
     private func setLoginState(_ state: LoginState, for accountID: UUID?) {
         if let accountID { loginState[accountID] = state } else { addLoginState = state }
+    }
+
+    /// The provider whose adapter serves one login flow: an existing account's own provider,
+    /// or, for the add-account flow, the provider most recently chosen for it.
+    func loginProvider(for accountID: UUID?) -> Provider {
+        guard let accountID, let account = accounts.first(where: { $0.id == accountID }) else {
+            return .anthropic
+        }
+        return account.provider
     }
 
     /// The email claude.ai should preselect, when this login re-auths an account whose
