@@ -16,8 +16,9 @@ enum CodexAuthFile {
         case unusable(reason: String)
     }
 
-    /// Anything larger is not a login file. Read before decoding, so a huge file is
-    /// rejected without being parsed.
+    /// Anything larger is not a login file. Enforced by reading at most `maxBytes + 1` bytes
+    /// and rejecting the overflow — never by looking the size up first, which a symlink
+    /// (whose own size is a few dozen bytes) would walk straight past.
     static let maxBytes = 1 << 20
 
     private struct File: Decodable {
@@ -51,9 +52,13 @@ enum CodexAuthFile {
 
     static func read(at url: URL = defaultURL()) throws -> CachedCredentials {
         guard FileManager.default.fileExists(atPath: url.path) else { throw ReadError.notFound }
-        guard let size = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? Int,
-              size <= maxBytes,
-              let data = try? Data(contentsOf: url),
+        guard let handle = try? FileHandle(forReadingFrom: url) else {
+            throw ReadError.unusable(reason: unreadable)
+        }
+        defer { try? handle.close() }
+        // One bounded read: nothing over the cap is ever held in memory, and there is no
+        // window between measuring the file and reading it.
+        guard let data = try? handle.read(upToCount: maxBytes + 1), data.count <= maxBytes,
               let file = try? JSONDecoder().decode(File.self, from: data) else {
             throw ReadError.unusable(reason: unreadable)
         }

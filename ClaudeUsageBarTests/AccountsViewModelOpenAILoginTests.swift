@@ -296,6 +296,31 @@ struct AccountsViewModelOpenAILoginTests {
         #expect(vm.addLoginState == .idle)
     }
 
+    @Test("An import whose identity check can't reach the server keeps the generic verify message")
+    func importTransportFailureIsNotReportedAsExpired() async {
+        let script = Script()
+        script.openAIIdentity = .failure(UsageAPIError.requestFailed(URLError(.notConnectedToInternet)))
+        let vm = makeVM(script)
+
+        await vm.importFromCodex()
+
+        // Offline says nothing about the imported token, so Retry is worth pressing.
+        #expect(vm.addLoginState == .failed("Logged in, but couldn't verify the account — Retry."))
+    }
+
+    @Test("A browser login rejected with 401 keeps the generic message — the expired copy is import-only")
+    func browserLoginRejectionIsNotReportedAsExpired() async {
+        let script = Script()
+        script.openAIIdentity = .failure(UsageAPIError.invalidResponse(401))
+        let vm = makeVM(script)
+
+        await vm.beginAddAccountLogin(provider: .openai)
+
+        // Nothing was imported here: telling the user Codex's login expired would point at a
+        // file this login never read.
+        #expect(vm.addLoginState == .failed("Logged in, but couldn't verify the account — Retry."))
+    }
+
     @Test("Importing an OpenAI account that is already tracked refreshes it")
     func importDedupes() async throws {
         let script = Script()
