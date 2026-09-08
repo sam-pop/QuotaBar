@@ -37,7 +37,8 @@ struct LoginPill: View {
                         // The field stands in for `.submitPaste`, so that action is dropped
                         // from the button row below.
                         if case .awaitingPaste = affordance { pasteField }
-                        buttonRow(affordance.actions.filter { $0 != .submitPaste })
+                        buttonRow(affordance.actions(supportsPaste: viewModel.supportsPaste(for: accountID))
+                            .filter { $0 != .submitPaste })
                     }
                 }
             }
@@ -212,7 +213,11 @@ struct LoginPill: View {
 
     private func help(for action: LoginAction) -> String {
         switch action {
-        case .logIn, .tryAgain: return "Opens claude.ai in your browser to sign in"
+        case .logIn, .tryAgain:
+            switch viewModel.loginProvider(for: accountID) {
+            case .anthropic: return "Opens claude.ai in your browser to sign in"
+            case .openai: return "Opens auth.openai.com in your browser to sign in"
+            }
         case .cancel: return "Stop waiting and leave this account as it is"
         case .copyLink: return "Copy the sign-in link, to open in a browser signed into this account"
         case .usePasteCode: return "Finish by pasting the code from the browser instead"

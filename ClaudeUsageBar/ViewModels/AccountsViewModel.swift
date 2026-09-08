@@ -53,6 +53,11 @@ final class AccountsViewModel: ObservableObject {
     /// Login state for the accountID==nil "add account" flow, mirroring `loginState`'s
     /// per-account entries.
     @Published var addLoginState: LoginState = .idle
+    /// The provider the add-account flow most recently chose. Every recovery control
+    /// ("Try again") calls `beginLogin(nil)` with no provider, so without this a failed
+    /// OpenAI add-account login would retry as a Claude one. Set by
+    /// `beginAddAccountLogin(provider:)`; never reset.
+    @Published private(set) var addLoginProvider: Provider = .anthropic
 
     /// The single injection point for every system-touching operation this coordinator
     /// performs, or hands down to the `AccountRuntime`s it owns: the browser OAuth flow,
@@ -91,8 +96,7 @@ final class AccountsViewModel: ObservableObject {
             Dependencies(
                 adapters: ProviderAdapters(
                     anthropic: AnthropicProvider.adapter,
-                    // Replaced by the real OpenAI adapter once its login service exists.
-                    openai: .unavailable(.openai)),
+                    openai: OpenAIProvider.adapter),
                 openURL: { url in
                     NSWorkspace.shared.open(url)
                 },
@@ -314,12 +318,27 @@ final class AccountsViewModel: ObservableObject {
         await runLogin(accountID, forcePaste: forcePaste)
     }
 
+    /// Starts an add-account login for `provider` — the menu's two "Add" items.
+    func beginAddAccountLogin(provider: Provider) async {
+        addLoginProvider = provider
+        await beginLogin(nil)
+    }
+
+    /// Whether the flow's provider can finish a login by paste. Drives which controls
+    /// `LoginPill` offers.
+    func supportsPaste(for accountID: UUID?) -> Bool {
+        deps.adapters.adapter(for: loginProvider(for: accountID)).supportsPaste
+    }
+
     /// Abandons the browser wait and restarts the same login in paste mode — the "use a code
     /// instead" recovery for a redirect that never comes back (a browser that blocks loopback
     /// requests, or a tab the user closed). The redirect URI is fixed for the life of a login,
     /// so switching modes has to be a brand-new login, not a change to this one.
     func switchToPaste() async {
         guard let pending = pendingLogin, pending.mode != .paste else { return }
+        // A provider whose login cannot finish by paste has nothing to switch to; the
+        // control is hidden for it, so this only catches a stale one.
+        guard supportsPaste(for: pending.accountID) else { return }
         let owner = pending.accountID
         await cancelLogin()
         await beginLogin(owner, forcePaste: true)
@@ -395,18 +414,24 @@ final class AccountsViewModel: ObservableObject {
 
     private func runLogin(_ accountID: UUID?, forcePaste: Bool) async {
         isStartingLogin = true
+        let adapter = deps.adapters.adapter(for: loginProvider(for: accountID))
         let started: (pending: PendingLogin, authorizeURL: URL,
                       server: LoopbackServer?, callback: Task<String?, Never>?)
         do {
-            started = try await deps.adapters.adapter(for: loginProvider(for: accountID))
-                .beginLogin(accountID, forcePaste, loginHintEmail(for: accountID))
+            started = try await adapter.beginLogin(accountID, forcePaste, loginHintEmail(for: accountID))
             isStartingLogin = false
         } catch {
             isStartingLogin = false
             if isCancellation(error) {
                 setLoginState(.idle, for: accountID)
             } else {
-                let message = "Couldn't start the login — try again."
+                let message: String
+                switch error {
+                case OAuthLoginStartError.portBusy:
+                    message = "Port 1455 is in use — is Codex signing in? Try again."
+                default:
+                    message = "Couldn't start the login — try again."
+                }
                 setLoginState(.failed(message), for: accountID)
                 notifyLoginProblem(accountID: accountID, message: message)
             }
@@ -436,6 +461,12 @@ final class AccountsViewModel: ObservableObject {
             // *accepted*, not the total call duration, so a code accepted at the boundary
             // still arrives non-nil above and is handled as the success it is; only nil gets
             // here, and the fixed redirect URI means the retry has to be a brand-new login.
+            guard adapter.supportsPaste else {
+                // No paste mode to fall back to (OpenAI): the login is over. `endLogin` posts
+                // the "didn't finish" notification for a `.failed` state.
+                await endLogin(.failed("The login timed out — try again."), for: accountID)
+                return
+            }
             await endLogin(.idle, for: accountID)
             // At most one restart: paste mode has no listener, so it cannot time out in turn.
             // Guarding on the flag rather than on `begin` returning no callback keeps that
@@ -541,7 +572,7 @@ final class AccountsViewModel: ObservableObject {
         if let accountID = pending.accountID {
             await completeReAuth(grant, accountID: accountID, identity: identity)
         } else {
-            await completeAddAccount(grant, identity: identity)
+            await completeAddAccount(grant, identity: identity, provider: pending.provider)
         }
     }
 
@@ -581,7 +612,8 @@ final class AccountsViewModel: ObservableObject {
         await storeAndFinish(grant, for: accountID, owner: accountID, notice: nil)
     }
 
-    private func completeAddAccount(_ grant: CachedCredentials, identity: AccountIdentity) async {
+    private func completeAddAccount(_ grant: CachedCredentials, identity: AccountIdentity,
+                                    provider: Provider) async {
         // Dedupe on the stable account uuid: logging into an account that is already tracked
         // refreshes it instead of creating a second copy.
         if let existing = accounts.first(where: { $0.accountUUID == identity.uuid }) {
@@ -591,7 +623,8 @@ final class AccountsViewModel: ObservableObject {
         }
 
         let label = identity.displayName ?? identity.email ?? "Account \(accounts.count + 1)"
-        let account = Account(label: label, accountUUID: identity.uuid, email: identity.email)
+        let account = Account(label: label, accountUUID: identity.uuid, email: identity.email,
+                              provider: provider)
         guard await storeGrant(grant, for: account.id, owner: nil) else { return }
         accounts.append(account)
         accountsStore.save(accounts)
@@ -684,7 +717,7 @@ final class AccountsViewModel: ObservableObject {
     /// or, for the add-account flow, the provider most recently chosen for it.
     func loginProvider(for accountID: UUID?) -> Provider {
         guard let accountID, let account = accounts.first(where: { $0.id == accountID }) else {
-            return .anthropic
+            return addLoginProvider
         }
         return account.provider
     }

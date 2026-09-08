@@ -81,3 +81,27 @@ enum AnthropicProvider {
             })
     }
 }
+
+/// The live OpenAI adapter. `supportsPaste` is false: the pinned redirect leaves no
+/// paste-mode fallback (spec §5.6).
+enum OpenAIProvider {
+    static var adapter: ProviderAdapter {
+        ProviderAdapter(
+            provider: .openai,
+            supportsPaste: false,
+            beginLogin: { accountID, _, _ in
+                try await OpenAILoginService().begin(accountID: accountID)
+            },
+            exchange: { code, pending in
+                try await OpenAILoginService().exchange(code: code, pending: pending)
+            },
+            fetchIdentity: { token in try await OpenAIUsageService.fetchIdentity(token: token) },
+            fetchUsage: { token in try await OpenAIUsageService.fetch(token: token) },
+            refreshToken: { creds in
+                guard let refreshToken = creds.refreshToken else {
+                    throw KeychainServiceError.noRefreshToken
+                }
+                return try await OpenAILoginService.performOAuthRefresh(refreshToken: refreshToken)
+            })
+    }
+}

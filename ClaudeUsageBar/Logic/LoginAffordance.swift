@@ -68,15 +68,17 @@ enum LoginAffordance: Equatable {
         }
     }
 
-    /// The controls this state offers, in display order.
-    var actions: [LoginAction] {
+    /// The controls this state offers, in display order. `supportsPaste` is false for a
+    /// provider whose login cannot finish by paste (OpenAI), which drops "Use a code
+    /// instead" while the browser is open.
+    func actions(supportsPaste: Bool) -> [LoginAction] {
         switch self {
         case .none:
             return []
         case .start:
             return [.logIn]
         case .waitingForBrowser:
-            return [.cancel, .copyLink, .usePasteCode]
+            return supportsPaste ? [.cancel, .copyLink, .usePasteCode] : [.cancel, .copyLink]
         case .awaitingPaste:
             // Copy link belongs here too: the page carrying the code is the page this URL
             // opens, so a user who closed that tab can reopen it instead of starting over.
@@ -98,6 +100,10 @@ enum LoginAffordance: Equatable {
             return [.dismiss]
         }
     }
+
+    /// `actions(supportsPaste: true)` — the Anthropic set, which every existing caller and
+    /// test expects.
+    var actions: [LoginAction] { actions(supportsPaste: true) }
 }
 
 /// One control the login affordance can offer. `submitPaste` stands for the text field and

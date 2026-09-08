@@ -106,6 +106,13 @@ struct LoginAffordanceTests {
         #expect(!affordance.actions.contains(.retryIdentity))
     }
 
+    @Test("actions(supportsPaste: false) drops the paste action while waiting for the browser; the property is the supportsPaste: true form")
+    func pasteGating() {
+        #expect(LoginAffordance.waitingForBrowser.actions(supportsPaste: false) == [.cancel, .copyLink])
+        #expect(LoginAffordance.waitingForBrowser.actions(supportsPaste: true) == [.cancel, .copyLink, .usePasteCode])
+        #expect(LoginAffordance.waitingForBrowser.actions == LoginAffordance.waitingForBrowser.actions(supportsPaste: true))
+    }
+
     @Test("Every state that carries a message surfaces it, and no other state does")
     func onlyFailuresCarryMessages() {
         #expect(resolve(.failed("boom")).message == "boom")

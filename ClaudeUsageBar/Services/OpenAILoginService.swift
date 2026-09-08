@@ -118,3 +118,44 @@ struct OpenAILoginService {
         return request
     }
 }
+
+extension OpenAILoginService {
+    /// Starts an OpenAI browser login. Loopback only: the redirect URI is pinned to
+    /// `http://localhost:1455/auth/callback` (spec §2 O2a), so there is no port to choose and
+    /// no paste fallback. A bind failure is `OAuthLoginStartError.portBusy` — most likely
+    /// Codex CLI mid-login. `gracePeriod: 0` because the port is shared: after a timeout the
+    /// listener releases it at once instead of serving an "expired" page for ten minutes.
+    ///
+    /// The wait is enqueued as a `Task` before returning, for the same reason
+    /// `OAuthLoginService.begin` does it: the listener must be armed before the browser can
+    /// deliver its redirect. The caller opens `authorizeURL` and awaits `callback`; a
+    /// delivered code stops the listener, and every other outcome relies on the caller's
+    /// `server.stop()`.
+    func begin(
+        accountID: UUID?,
+        now: @Sendable () -> Date = Date.init,
+        makeServer: @Sendable () -> LoopbackServer = {
+            LoopbackServer(gracePeriod: 0,
+                           requestedPort: OpenAIOAuthEndpoints.callbackPort,
+                           callbackPath: OpenAIOAuthEndpoints.callbackPath)
+        }
+    ) async throws -> StartedLogin {
+        let pkce = OAuthPKCE.generate()
+        let server = makeServer()
+        do {
+            _ = try await server.start()
+        } catch LoopbackServer.StartError.bindFailed {
+            throw OAuthLoginStartError.portBusy
+        }
+        let pending = PendingLogin(
+            accountID: accountID, mode: .loopback(port: OpenAIOAuthEndpoints.callbackPort), pkce: pkce,
+            redirectURI: OpenAIOAuthEndpoints.redirectURI, startedAt: now(), provider: .openai)
+        let expectedState = pkce.state
+        let callback = Task<String?, Never> {
+            let code = await server.waitForCallback(expectedState: expectedState, timeout: OAuthLoginService.loopbackTimeout)
+            if code != nil { await server.stop() }
+            return code
+        }
+        return (pending, pending.authorizeURL(loginHintEmail: nil), server, callback)
+    }
+}
