@@ -5,9 +5,34 @@ struct CachedCredentials: Codable, Equatable {
     var refreshToken: String?
     var expiresAt: Date?
     /// Expiry of the refresh token itself (Anthropic's refresh tokens carry a rolling
-    /// ~28-day expiry). Optional so previously-persisted payloads without this field still
-    /// decode.
+    /// ~28-day expiry; OpenAI's token response has no such field, so it stays nil there).
+    /// Optional so previously-persisted payloads without this field still decode.
     var refreshTokenExpiresAt: Date?
+    /// Which provider issued these tokens. `nil` on payloads written before the field
+    /// existed, which are all Anthropic. Read by `AccountMigration`'s rebuild path only.
+    var provider: Provider?
+
+    init(accessToken: String, refreshToken: String?, expiresAt: Date?,
+         refreshTokenExpiresAt: Date? = nil, provider: Provider? = nil) {
+        self.accessToken = accessToken
+        self.refreshToken = refreshToken
+        self.expiresAt = expiresAt
+        self.refreshTokenExpiresAt = refreshTokenExpiresAt
+        self.provider = provider
+    }
+
+    enum CodingKeys: String, CodingKey { case accessToken, refreshToken, expiresAt, refreshTokenExpiresAt, provider }
+
+    /// Hand-written so an unrecognized `provider` string decodes as nil instead of failing
+    /// the whole credential map, which `AccountCredentialStore` would then treat as unreadable.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        accessToken = try c.decode(String.self, forKey: .accessToken)
+        refreshToken = try c.decodeIfPresent(String.self, forKey: .refreshToken)
+        expiresAt = try c.decodeIfPresent(Date.self, forKey: .expiresAt)
+        refreshTokenExpiresAt = try c.decodeIfPresent(Date.self, forKey: .refreshTokenExpiresAt)
+        provider = try c.decodeIfPresent(String.self, forKey: .provider).flatMap(Provider.init(rawValue:))
+    }
 
     /// Whether the access token has expired or will within `leeway`. Tokens without a
     /// known expiry (`expiresAt == nil`) never report as needing a proactive refresh —

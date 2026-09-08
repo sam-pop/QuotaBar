@@ -100,6 +100,25 @@ struct AccountMigrationTests {
         #expect(!deleted)                                  // not a legacy-cleanup path
     }
 
+    @Test("Rebuilding the list from a surviving credential map keeps each slot's provider")
+    func rebuildKeepsProvider() throws {
+        let defaults = ephemeralDefaults()
+        let openAIID = UUID(), claudeID = UUID()
+        var openAICreds = CachedCredentials(accessToken: "o", refreshToken: "r", expiresAt: nil)
+        openAICreds.provider = .openai
+        let credStore = InMemoryAccountCredentialStore([
+            openAIID: openAICreds,
+            claudeID: CachedCredentials(accessToken: "c", refreshToken: "r", expiresAt: nil),
+        ])
+        let migration = makeMigration(defaults: defaults, credentialStore: credStore, legacyCreds: nil)
+
+        let accounts = migration.run()
+
+        #expect(accounts.count == 2)
+        #expect(accounts.first { $0.id == openAIID }?.provider == .openai)
+        #expect(accounts.first { $0.id == claudeID }?.provider == .anthropic)
+    }
+
     @Test("Save failure: legacy artifacts are NOT deleted and migration is not marked done")
     func saveFailureKeepsLegacy() {
         let defaults = ephemeralDefaults()

@@ -27,9 +27,11 @@ struct AccountMigration {
 
         // Defaults were reset but the credential map survived in the keychain — rebuild the
         // list from its slots rather than overwriting real accounts with a fresh single one.
+        // Each slot's provider tag comes along; a slot written before the tag existed is
+        // Anthropic.
         if let existing = try? credentialStore.loadAll(), !existing.isEmpty {
-            let accounts = existing.keys.enumerated().map { index, id in
-                Account(id: id, label: "Account \(index + 1)")
+            let accounts = existing.enumerated().map { index, entry in
+                Account(id: entry.key, label: "Account \(index + 1)", provider: entry.value.provider ?? .anthropic)
             }
             accountsStore.save(accounts)
             return accounts

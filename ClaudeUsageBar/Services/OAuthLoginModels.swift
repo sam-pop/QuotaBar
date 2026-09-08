@@ -1,12 +1,14 @@
 import Foundation
 
-/// How the browser OAuth login receives its authorization code back from Anthropic.
-/// `loopback` runs a local HTTP server on an ephemeral port and captures the redirect
-/// directly; `paste` sends the browser to Anthropic's own callback page, which renders
-/// a `code#state` string for the user to copy back into the app.
+/// How a login receives its credentials. `loopback` runs a local HTTP server and captures
+/// the browser redirect; `paste` sends the browser to Anthropic's own callback page, which
+/// renders a `code#state` string for the user to copy back into the app; `imported` has no
+/// browser at all — the credentials were read from Codex CLI's login file and only the
+/// identity/store tail of a login runs.
 enum OAuthLoginMode: Equatable {
     case loopback(port: UInt16)
     case paste
+    case imported
 }
 
 /// A browser OAuth login that has been started but not yet completed. `pkce` is the
@@ -21,6 +23,18 @@ struct PendingLogin: Equatable {
     let pkce: OAuthPKCE
     let redirectURI: String
     let startedAt: Date
+    /// Which provider's adapter finishes this login (exchange + identity).
+    let provider: Provider
+
+    init(accountID: UUID?, mode: OAuthLoginMode, pkce: OAuthPKCE, redirectURI: String,
+         startedAt: Date, provider: Provider = .anthropic) {
+        self.accountID = accountID
+        self.mode = mode
+        self.pkce = pkce
+        self.redirectURI = redirectURI
+        self.startedAt = startedAt
+        self.provider = provider
+    }
 }
 
 /// Anthropic's OAuth endpoints and client parameters for the browser login flow,
