@@ -21,6 +21,9 @@ struct AccountsViewModelOpenAILoginTests {
         var openAIUsageCalls = 0
         var notifications: [UNNotificationRequest] = []
         var openedCount = 0
+        var codexProbe: CodexAuthFile.Probe = .available
+        var codexRead: Result<CachedCredentials, Error> = .success(
+            CachedCredentials(accessToken: "codex-access", refreshToken: "codex-refresh", expiresAt: nil, provider: .openai))
     }
 
     private func ephemeralDefaults() -> UserDefaults {
@@ -79,7 +82,9 @@ struct AccountsViewModelOpenAILoginTests {
             resolveLegacyCredentials: { nil },
             deleteLegacyArtifacts: {},
             requestNotificationAuthorization: { nil },
-            addNotification: { script.notifications.append($0) })
+            addNotification: { script.notifications.append($0) },
+            probeCodexAuthFile: { script.codexProbe },
+            readCodexAuthFile: { try script.codexRead.get() })
     }
 
     private func makeVM(_ script: Script, accounts: [Account] = [], store: AccountCredentialStoring = InMemoryAccountCredentialStore()) -> AccountsViewModel {
@@ -173,8 +178,8 @@ struct AccountsViewModelOpenAILoginTests {
         let pending = vm.pendingLogin
         #expect(pending?.provider == .openai)
 
-        // The one-login-at-a-time rule refuses this silently — but it has already moved
-        // `addLoginProvider`, so the controls must still follow the login that is running.
+        // The one-login-at-a-time rule refuses this silently, and the controls follow the
+        // login that is running rather than the provider of the click that was refused.
         await vm.beginAddAccountLogin(provider: .anthropic)
 
         #expect(vm.supportsPaste(for: nil) == false)
@@ -216,6 +221,92 @@ struct AccountsViewModelOpenAILoginTests {
 
         #expect(vm.accounts.count == 1)
         #expect(try store.loadAll()[existing.id]?.accessToken == "oa-token")
+        #expect(vm.addLoginState == .notice("“Codex” is already tracked — its login was refreshed."))
+    }
+
+    @Test("An Add click refused by the one-login rule leaves the running login's provider in place")
+    func refusedAddClickDoesNotMoveTheProvider() async {
+        let script = Script()
+        // Parks the OpenAI add-login in `identityFailed`, still holding the pending slot.
+        script.openAIIdentity = .failure(StubError())
+        let vm = makeVM(script)
+
+        await vm.beginAddAccountLogin(provider: .openai)
+        await vm.beginAddAccountLogin(provider: .anthropic)   // refused by the gate
+
+        // Otherwise the refused click's provider would be what "Try again" — and an Anthropic
+        // login's paste restart — later runs as.
+        #expect(vm.addLoginProvider == .openai)
+    }
+
+    @Test("Import from Codex: no browser, identity via the OpenAI adapter, account stored as openai")
+    func importHappyPath() async throws {
+        let script = Script()
+        let store = InMemoryAccountCredentialStore()
+        let vm = makeVM(script, store: store)
+
+        await vm.importFromCodex()
+
+        #expect(script.openedCount == 0)
+        #expect(script.openAIBeginCalls == 0)
+        #expect(vm.accounts.count == 1)
+        let account = try #require(vm.accounts.first)
+        #expect(account.provider == .openai)
+        #expect(try store.loadAll()[account.id]?.accessToken == "codex-access")
+        #expect(vm.pendingLogin == nil)
+        #expect(vm.addLoginState == .idle)
+        #expect(vm.addLoginProvider == .openai)
+    }
+
+    @Test("Import is refused while a login is pending, and leaves that login untouched")
+    func importRefusedWhilePending() async {
+        let script = Script()
+        // Park a re-auth login in `identityFailed`: a transport failure on the identity step
+        // keeps the grant in memory and the pending slot held, exactly the state a concurrent
+        // import must not disturb.
+        let account = Account(label: "Codex", accountUUID: "cg-1", provider: .openai)
+        let vm = makeVM(script, accounts: [account])
+        script.openAIIdentity = .failure(UsageAPIError.requestFailed(URLError(.notConnectedToInternet)))
+        await vm.beginLogin(account.id)
+        #expect(vm.canRetryIdentity(for: account.id))
+        let pendingBefore = vm.pendingLogin
+
+        await vm.importFromCodex()
+
+        #expect(vm.addLoginState == .failed("Finish the login in progress first."))
+        #expect(vm.pendingLogin == pendingBefore)
+        #expect(vm.canRetryIdentity(for: account.id))
+    }
+
+    @Test("An expired Codex token fails identity with the expired message and keeps Retry")
+    func importExpiredToken() async {
+        let script = Script()
+        script.openAIIdentity = .failure(UsageAPIError.invalidResponse(401))
+        let vm = makeVM(script)
+
+        await vm.importFromCodex()
+
+        #expect(vm.addLoginState == .failed("Codex's login has expired — sign in with the browser instead."))
+        #expect(vm.canRetryIdentity(for: nil))
+        #expect(vm.loginAffordance(for: nil) == .identityFailed(message: "Codex's login has expired — sign in with the browser instead."))
+
+        script.openAIIdentity = .success(AccountIdentity(uuid: "cg-1", email: "sam@example.com", displayName: nil))
+        await vm.retryIdentity()
+        #expect(vm.accounts.count == 1)
+        #expect(vm.addLoginState == .idle)
+    }
+
+    @Test("Importing an OpenAI account that is already tracked refreshes it")
+    func importDedupes() async throws {
+        let script = Script()
+        let existing = Account(label: "Codex", accountUUID: "cg-1", provider: .openai)
+        let store = InMemoryAccountCredentialStore([existing.id: CachedCredentials(accessToken: "old", refreshToken: "r", expiresAt: nil, provider: .openai)])
+        let vm = makeVM(script, accounts: [existing], store: store)
+
+        await vm.importFromCodex()
+
+        #expect(vm.accounts.count == 1)
+        #expect(try store.loadAll()[existing.id]?.accessToken == "codex-access")
         #expect(vm.addLoginState == .notice("“Codex” is already tracked — its login was refreshed."))
     }
 }

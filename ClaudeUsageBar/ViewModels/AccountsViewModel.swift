@@ -32,6 +32,9 @@ final class AccountsViewModel: ObservableObject {
         case idle
         case waitingForBrowser(since: Date)
         case awaitingPaste
+        /// Credentials read out of Codex CLI's login file, with the identity check running.
+        /// No browser is involved, so there is nothing to wait for and nothing to paste.
+        case importing
         case failed(String)
         /// A login that landed, but not on the slot the user aimed at — the identity turned
         /// out to belong to an account already tracked, so its credentials went there. Its own
@@ -58,6 +61,9 @@ final class AccountsViewModel: ObservableObject {
     /// OpenAI add-account login would retry as a Claude one. Set by
     /// `beginAddAccountLogin(provider:)`; never reset.
     @Published private(set) var addLoginProvider: Provider = .anthropic
+    /// Whether Codex CLI's login file is importable right now. Refreshed when the popover
+    /// appears, not on a timer.
+    @Published private(set) var codexImport: CodexAuthFile.Probe = .notFound
 
     /// The single injection point for every system-touching operation this coordinator
     /// performs, or hands down to the `AccountRuntime`s it owns: the browser OAuth flow,
@@ -86,6 +92,12 @@ final class AccountsViewModel: ObservableObject {
         /// the real `UNUserNotificationCenter` — recording the call (or doing nothing) is
         /// the point.
         var addNotification: @Sendable (UNNotificationRequest) -> Void
+        /// Checks whether Codex CLI's login file is importable. A test double must not
+        /// touch the filesystem.
+        var probeCodexAuthFile: @Sendable () -> CodexAuthFile.Probe
+        /// Reads Codex CLI's login file into credentials. A test double must not touch the
+        /// filesystem.
+        var readCodexAuthFile: @Sendable () throws -> CachedCredentials
 
         /// Wires the real `OAuthLoginService`, `ProfileService`, `NSWorkspace` browser
         /// opener, `UsageAPIService`/`KeychainService` usage-refresh calls, notification
@@ -112,7 +124,9 @@ final class AccountsViewModel: ObservableObject {
                     let settings = await center.notificationSettings()
                     return settings.authorizationStatus == .authorized
                 },
-                addNotification: { UNUserNotificationCenter.current().add($0) }
+                addNotification: { UNUserNotificationCenter.current().add($0) },
+                probeCodexAuthFile: { CodexAuthFile.probe() },
+                readCodexAuthFile: { try CodexAuthFile.read() }
             )
         }
     }
@@ -319,9 +333,48 @@ final class AccountsViewModel: ObservableObject {
     }
 
     /// Starts an add-account login for `provider` — the menu's two "Add" items.
+    ///
+    /// The provider is recorded only when the one-login gate below is actually open: a click
+    /// that gets refused must not leave its provider behind for the *running* login's later
+    /// "Try again" (or an Anthropic loopback timeout's paste restart) to pick up.
     func beginAddAccountLogin(provider: Provider) async {
-        addLoginProvider = provider
+        if pendingLogin == nil, !isStartingLogin { addLoginProvider = provider }
         await beginLogin(nil)
+    }
+
+    func refreshCodexImportProbe() {
+        codexImport = deps.probeCodexAuthFile()
+    }
+
+    /// Imports Codex CLI's login as a new OpenAI account. This is a login without a browser:
+    /// it claims the one pending-login slot like any other, so it is refused while a login is
+    /// running and cannot end a concurrent login's state, and it runs the same identity →
+    /// dedupe → store tail as a browser login, so `retryIdentity()` works if the identity
+    /// check fails.
+    func importFromCodex() async {
+        guard pendingLogin == nil, !isStartingLogin else {
+            setLoginState(.failed(Self.busyMessage), for: nil)
+            return
+        }
+        addLoginProvider = .openai
+        let grant: CachedCredentials
+        do {
+            grant = try deps.readCodexAuthFile()
+        } catch {
+            let message = "Couldn't read Codex's login file — sign in with the browser instead."
+            setLoginState(.failed(message), for: nil)
+            notifyLoginProblem(accountID: nil, message: message)
+            return
+        }
+        loginEpoch += 1
+        let pending = PendingLogin(
+            accountID: nil, mode: .imported, pkce: OAuthPKCE.generate(), redirectURI: "",
+            startedAt: deps.now(), provider: .openai)
+        pendingLogin = pending
+        pendingAuthorizeURL = nil
+        unverifiedGrant = grant
+        setLoginState(.importing, for: nil)
+        await verifyAndStore(grant, pending: pending)
     }
 
     /// Whether the flow's provider can finish a login by paste — the live login's provider
@@ -405,7 +458,7 @@ final class AccountsViewModel: ObservableObject {
         if let pending = pendingLogin, pending.accountID == accountID { return }
         switch currentLoginState(for: accountID) {
         case .failed, .notice: setLoginState(.idle, for: accountID)
-        case .idle, .waitingForBrowser, .awaitingPaste: return
+        case .idle, .waitingForBrowser, .awaitingPaste, .importing: return
         }
     }
 
@@ -560,7 +613,15 @@ final class AccountsViewModel: ObservableObject {
             }
             // The grant and the pending login stay in memory so `retryIdentity()` can re-run
             // only this step.
-            let message = "Logged in, but couldn't verify the account — Retry."
+            let message: String
+            if pending.mode == .imported, case .invalidResponse(let status)? = error as? UsageAPIError,
+               (401...403).contains(status) {
+                // An imported token the endpoint rejects outright is a dead Codex login, not a
+                // blip: Retry will keep failing until the user signs in with the browser.
+                message = "Codex's login has expired — sign in with the browser instead."
+            } else {
+                message = "Logged in, but couldn't verify the account — Retry."
+            }
             setLoginState(.failed(message), for: pending.accountID)
             // Not terminal, but it is where the login stops without the user being told: this
             // state holds the pending login, so every later click is refused until they come

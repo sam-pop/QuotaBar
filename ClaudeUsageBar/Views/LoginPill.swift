@@ -56,6 +56,8 @@ struct LoginPill: View {
             line("Login expired — usage can't refresh.", icon: "key.slash.fill", tint: .red)
         case .waitingForBrowser:
             line("Waiting for browser…", icon: "safari", tint: .blue)
+        case .importing:
+            line("Checking Codex's login…", icon: "arrow.down.circle", tint: .blue)
         case .awaitingPaste(let rejection):
             if let rejection {
                 line(rejection, icon: "exclamationmark.triangle.fill", tint: .red)
@@ -229,7 +231,7 @@ struct LoginPill: View {
 
     private func tint(for affordance: LoginAffordance) -> Color {
         switch affordance {
-        case .waitingForBrowser: return .blue
+        case .waitingForBrowser, .importing: return .blue
         case .awaitingPaste(let rejection): return rejection == nil ? .blue : .red
         case .notice: return .secondary
         case .none, .start, .identityFailed, .failed: return .red

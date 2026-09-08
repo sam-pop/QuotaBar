@@ -54,7 +54,9 @@ struct AccountsViewModelLoginTests {
             },
             deleteLegacyArtifacts: { calls.delete += 1 },
             requestNotificationAuthorization: { nil },
-            addNotification: { _ in })
+            addNotification: { _ in },
+            probeCodexAuthFile: { .notFound },
+            readCodexAuthFile: { throw CodexAuthFile.ReadError.notFound })
     }
 
     @Test("No legacy credentials: init routes through the seam, deletes nothing, attaches no accounts")
@@ -270,7 +272,9 @@ struct AccountsViewModelBrowserLoginTests {
             resolveLegacyCredentials: { nil },
             deleteLegacyArtifacts: {},
             requestNotificationAuthorization: { nil },
-            addNotification: { script.notifications.append($0) })
+            addNotification: { script.notifications.append($0) },
+            probeCodexAuthFile: { .notFound },
+            readCodexAuthFile: { throw CodexAuthFile.ReadError.notFound })
     }
 
     private func makeVM(
