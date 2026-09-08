@@ -22,6 +22,11 @@ struct UsageMatrixView: View {
         let critical: Bool
     }
 
+    /// Same rule as the menu bar: name the provider only when there is more than one.
+    private var mixedProviders: Bool {
+        MultiAccountMenuBar.providerShapes(for: columns.map(\.account.provider))
+    }
+
     private var modelNames: [String] {
         UsageComparison.modelRowNames(columns.map { $0.snapshot?.modelLimits ?? [] })
     }
@@ -86,6 +91,15 @@ struct UsageMatrixView: View {
             }
             if let email = account.email, email != account.label {
                 Text(email).font(.system(size: 9)).foregroundStyle(.tertiary).lineLimit(1)
+            }
+            if mixedProviders {
+                HStack(spacing: 3) {
+                    Image(systemName: account.provider == .anthropic ? "sparkle" : "hexagon").font(.system(size: 7))
+                    Text(account.provider.displayName.uppercased()).font(.system(size: 8, weight: .semibold)).tracking(0.4)
+                }
+                .foregroundStyle(.tertiary)
+                .padding(.horizontal, 5).padding(.vertical, 1)
+                .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.primary.opacity(0.12), lineWidth: 0.5))
             }
             freshness(column, now: now)
             // A separate line, not a replacement for the one above: staleness and the

@@ -169,6 +169,40 @@ struct AccountsViewModelLoginTests {
         #expect(loginExpiryNotices.first?.content.body.contains("2 days") == true)
         #expect(loginExpiryNotices.first?.content.body.contains("3 days") == false)
     }
+
+    @Test("Threshold notifications are titled without a vendor name; the add-flow fallback label is 'Add account'")
+    func notificationCopyIsVendorNeutral() async {
+        let calls = Calls()
+        let sharedDefaults = ephemeralDefaults()
+        let account = Account(label: "Codex", accountUUID: "cg-1", provider: .openai)
+        let accountsStore = AccountsStore(defaults: sharedDefaults)
+        accountsStore.save([account])
+        let credentialStore = InMemoryAccountCredentialStore([
+            account.id: CachedCredentials(accessToken: "t", refreshToken: "r", expiresAt: nil, provider: .openai)
+        ])
+        var deps = makeDeps(calls: calls, legacyCredentials: nil)
+        deps.addNotification = { calls.notifications.append($0) }
+        deps.adapters.openai = ProviderAdapter(
+            provider: .openai, supportsPaste: false,
+            beginLogin: { _, _, _ in throw OAuthLoginStartError.portBusy },
+            exchange: { _, _ in throw OAuthLoginError.transient },
+            fetchIdentity: { _ in AccountIdentity(uuid: "cg-1", email: nil, displayName: nil) },
+            fetchUsage: { _ in
+                UsageResponse(fiveHour: UsagePeriod(utilization: 95, resetsAt: "2026-09-09T00:00:00Z"),
+                              sevenDay: UsagePeriod(utilization: 10, resetsAt: "2026-09-13T00:00:00Z"))
+            },
+            refreshToken: { _ in throw StubError() })
+        let vm = AccountsViewModel(accountsStore: accountsStore, credentialStore: credentialStore,
+                                   defaults: sharedDefaults, startTimer: false, deps: deps)
+
+        await vm.refreshAll()
+        let usage = calls.notifications.first { $0.identifier.hasPrefix("usage-") }
+        #expect(usage?.content.title == "Codex: Usage Warning")
+
+        await vm.beginAddAccountLogin(provider: .openai)
+        let login = calls.notifications.first { $0.identifier == "login-outcome-add" }
+        #expect(login?.content.title == "Add account: login didn't finish")
+    }
 }
 
 /// The browser-login flow: its error taxonomy, the one-pending-login rule, and the paths

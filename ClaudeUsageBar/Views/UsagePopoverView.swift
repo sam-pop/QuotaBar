@@ -44,6 +44,10 @@ struct UsagePopoverView: View {
             footer.padding(.horizontal, 16).padding(.vertical, 10)
         }
         .frame(width: popoverWidth)
+        // The probe reads the filesystem, so it is refreshed when the popover opens rather
+        // than on a timer: a Codex login that appeared (or expired) since last time is
+        // picked up before the menu can offer it.
+        .onAppear { viewModel.refreshCodexImportProbe() }
     }
 
     private var singleAccountList: some View {
@@ -95,15 +99,27 @@ struct UsagePopoverView: View {
             // Once an add-account login is running, its own controls replace the button that
             // started it — starting a second one would be refused anyway.
             if viewModel.loginAffordance(for: nil) == .none {
-                Button {
-                    Task { await viewModel.beginLogin(nil) }
+                Menu {
+                    Button {
+                        Task { await viewModel.beginAddAccountLogin(provider: .anthropic) }
+                    } label: { Label("Claude", systemImage: "sparkle") }
+                        .help("Opens claude.ai in your browser to sign in")
+                    Button {
+                        Task { await viewModel.beginAddAccountLogin(provider: .openai) }
+                    } label: { Label("OpenAI / Codex", systemImage: "hexagon") }
+                        .help("Opens auth.openai.com in your browser to sign in with your ChatGPT account")
+                    Divider()
+                    Button {
+                        Task { await viewModel.importFromCodex() }
+                    } label: { Label("Import from Codex CLI", systemImage: "arrow.down.circle") }
+                        .disabled(viewModel.codexImport != .available)
+                        .help(importHelp)
                 } label: {
                     Label("Add account…", systemImage: "plus.circle")
                         .font(.system(size: 12, weight: .medium))
                         .frame(maxWidth: .infinity)
                 }
                 .controlSize(.small)
-                .help("Opens claude.ai in your browser to sign in")
             } else {
                 LoginPill(viewModel: viewModel, accountID: nil)
             }
@@ -117,6 +133,16 @@ struct UsagePopoverView: View {
             }
         }
         .padding(.horizontal, 16).padding(.vertical, 8)
+    }
+
+    /// Why the import item is offered or disabled — the probe's own reason, so a Codex login
+    /// that is present but unusable (API-key mode, malformed, oversized) says which.
+    private var importHelp: String {
+        switch viewModel.codexImport {
+        case .available: return "Copies the login from ~/.codex/auth.json; Codex CLI keeps its own"
+        case .notFound: return "No Codex CLI login found at ~/.codex/auth.json"
+        case .unusable(let reason): return reason
+        }
     }
 
     // MARK: - Footer

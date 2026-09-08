@@ -854,7 +854,7 @@ final class AccountsViewModel: ObservableObject {
     }
 
     private func label(for accountID: UUID?) -> String {
-        accountID.flatMap { id in accounts.first(where: { $0.id == id })?.label } ?? "Claude Usage"
+        accountID.flatMap { id in accounts.first(where: { $0.id == id })?.label } ?? "Add account"
     }
 
     // MARK: - Account operations
@@ -920,7 +920,7 @@ final class AccountsViewModel: ObservableObject {
             : ("7-day", "sevenDay")
 
         let content = UNMutableNotificationContent()
-        content.title = "\(account.label): Claude Usage Warning"
+        content.title = "\(account.label): Usage Warning"
         content.body = crossing.threshold >= 90
             ? "\(windowName) window at \(crossing.percent)% — approaching limit!"
             : "\(windowName) window at \(crossing.percent)%"
