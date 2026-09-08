@@ -6,10 +6,12 @@ import Network
 /// Serves until satisfied or timed out — never single-shot. Browsers speculatively open
 /// connections and ask for `/favicon.ico`, and the authorization code is single-use, so a
 /// listener that consumed the first connection and exited could lose the real callback and
-/// strand the login. Anything that is not `GET /callback` carrying a non-empty `code` and a
-/// `state` equal to `expectedState` gets a `404`, and the listener keeps accepting.
+/// strand the login. Anything that is not a `GET` of the configured callback path carrying a
+/// non-empty `code` and a `state` equal to `expectedState` gets a `404`, and the listener
+/// keeps accepting.
 ///
-/// Binds `127.0.0.1` only (never all interfaces) on an OS-assigned port. Every response
+/// Binds `127.0.0.1` only (never all interfaces), on an OS-assigned port unless a fixed one
+/// is requested (see `init(gracePeriod:requestedPort:callbackPath:)`). Every response
 /// body is a fixed string: no request-derived content — path, query, `code`, `state` — is
 /// ever written back, so nothing from the redirect can be reflected into the page.
 ///
@@ -33,6 +35,7 @@ actor LoopbackServer {
     private let engine: LoopbackEngine
     private let requestedPort: UInt16
     private let gracePeriod: TimeInterval
+    private let callbackPath: String
 
     private var port: UInt16?
     private var waiter: CheckedContinuation<String?, Never>?
@@ -46,14 +49,17 @@ actor LoopbackServer {
     /// - Parameters:
     ///   - gracePeriod: how long the "login expired" page keeps being served after a
     ///     timeout, so a late browser redirect lands on a page instead of
-    ///     connection-refused. The listener shuts itself down when it elapses.
-    ///   - requestedPort: a fixed port instead of an OS-assigned one. Test seam only —
-    ///     production uses the default `0` (ephemeral); a fixed port is what lets a test
-    ///     force a real bind conflict.
-    init(gracePeriod: TimeInterval = 600, requestedPort: UInt16 = 0) {
+    ///     connection-refused. The listener shuts itself down when it elapses. `0` stops
+    ///     at once — used on the fixed OpenAI port, which another process may need.
+    ///   - requestedPort: a fixed port instead of an OS-assigned one. OpenAI's redirect URI
+    ///     is pinned to 1455; Anthropic logins keep the default `0` (ephemeral).
+    ///   - callbackPath: the path the redirect must hit (`/callback` for Anthropic,
+    ///     `/auth/callback` for OpenAI). Anything else is answered 404.
+    init(gracePeriod: TimeInterval = 600, requestedPort: UInt16 = 0, callbackPath: String = "/callback") {
         self.gracePeriod = gracePeriod
         self.requestedPort = requestedPort
-        self.engine = LoopbackEngine()
+        self.callbackPath = callbackPath
+        self.engine = LoopbackEngine(callbackPath: callbackPath)
     }
 
     /// Binds the loopback port and returns the OS-assigned port number.
@@ -71,8 +77,9 @@ actor LoopbackServer {
         return bound
     }
 
-    /// Waits for `GET /callback?code=…&state=…` with `state == expectedState` and returns
-    /// the code, or `nil` on timeout, on `stop()`, or if the server was never started.
+    /// Waits for a `GET` of the configured callback path carrying `code=…&state=…` with
+    /// `state == expectedState` and returns the code, or `nil` on timeout, on `stop()`, or if
+    /// the server was never started.
     ///
     /// `timeout` bounds how long this waits for a callback to be *accepted*, not the total
     /// call duration: a callback accepted right at the boundary is always delivered, so a
@@ -176,8 +183,13 @@ private final class LoopbackEngine: @unchecked Sendable {
     /// that deliberately fills every slot (out of scope — a same-user attacker has far better
     /// levers than this listener).
     private static let maxConnections = 64
+    /// Cap on how long `stop()` waits for the listener to finish cancelling. Reaching it means
+    /// the port may still be briefly taken, which beats freezing the next login outright.
+    private static let cancelTimeout: TimeInterval = 1
 
     private let queue = DispatchQueue(label: "com.sam.ClaudeUsageBar.loopback")
+    /// The only path a callback is accepted on; every other target is answered 404.
+    private let callbackPath: String
 
     private var listener: NWListener?
     private var connections: [ObjectIdentifier: NWConnection] = [:]
@@ -185,6 +197,10 @@ private final class LoopbackEngine: @unchecked Sendable {
     private var phase: Phase = .idle
     private var expectedState = ""
     private var onCode: (@Sendable (String) -> Void)?
+
+    init(callbackPath: String) {
+        self.callbackPath = callbackPath
+    }
 
     // MARK: - Lifecycle (called from the actor)
 
@@ -197,10 +213,15 @@ private final class LoopbackEngine: @unchecked Sendable {
         let parameters = NWParameters.tcp
         // Loopback only: `requiredLocalEndpoint` pins the bind to 127.0.0.1 — verified with
         // `lsof`, which shows `TCP 127.0.0.1:<port> (LISTEN)` and no wildcard socket. Port 0
-        // means OS-assigned. Endpoint reuse stays off; an already-taken port was then observed
-        // to fail with EADDRINUSE rather than bind alongside.
+        // means OS-assigned.
         parameters.requiredLocalEndpoint = .hostPort(host: .ipv4(.loopback), port: endpointPort)
-        parameters.allowLocalEndpointReuse = false
+        // Ephemeral ports: reuse stays off, so a taken port fails with EADDRINUSE rather
+        // than binding alongside. Fixed ports: reuse is on, because after this listener
+        // serves and closes one connection the port sits in TIME_WAIT and a plain rebind
+        // was measured to fail for ~31 s — every "Try again" inside that window would have
+        // reported the port busy. A port held by a live listener still fails to bind with
+        // reuse on (covered by `fixedPortConflictStillDetected`).
+        parameters.allowLocalEndpointReuse = requestedPort != 0
 
         let listener: NWListener
         do {
@@ -268,27 +289,52 @@ private final class LoopbackEngine: @unchecked Sendable {
     }
 
     /// Synchronous on purpose: when this returns, `cancel()` has been called on the listener
-    /// and on every open connection, so teardown is ordered ahead of whatever the caller does
-    /// next. `NWListener.cancel()` itself completes asynchronously, so this orders the request
-    /// rather than proving the socket is closed; in practice the port has been re-bindable
-    /// immediately. (`queue` only runs non-blocking work and nothing on it waits on the actor,
-    /// so this cannot deadlock.)
+    /// and on every open connection, and the listener has reported that it finished cancelling
+    /// — so the port is free for an immediate rebind.
+    ///
+    /// The wait is what makes that last part true. Merely *requesting* the cancel left a
+    /// window of a few hundred microseconds in which rebinding the same fixed port still
+    /// failed with EADDRINUSE: `fixedPortRebindsAfterServing` failed 5 runs in 8 without it,
+    /// on binds where no connection had ever been served (so TIME_WAIT could not explain it)
+    /// and where a retry succeeded 0.3–0.6 ms later.
+    ///
+    /// Capped at `cancelTimeout`, because `endLogin`/`cancelLogin` await this before any later
+    /// login can start: a listener that never reports back must not freeze them.
+    ///
+    /// (`queue` only runs non-blocking work and nothing on it waits on the actor, so this
+    /// cannot deadlock; the wait itself is outside `queue`, so the state handler that ends it
+    /// is free to run.)
     func stop() {
-        queue.sync {
-            self.phase = .stopped
-            self.expectedState = ""
-            self.onCode = nil
-            self.listener?.stateUpdateHandler = nil
-            self.listener?.newConnectionHandler = nil
-            self.listener?.cancel()
-            self.listener = nil
-            for connection in self.connections.values {
+        let finished = DispatchSemaphore(value: 0)
+        let isCancelling: Bool = queue.sync {
+            phase = .stopped
+            expectedState = ""
+            onCode = nil
+            for connection in connections.values {
                 connection.stateUpdateHandler = nil
                 connection.cancel()
             }
-            self.connections.removeAll()
-            self.buffers.removeAll()
+            connections.removeAll()
+            buffers.removeAll()
+            guard let listener else { return false }
+            self.listener = nil
+            // Replaces the bind-time handler: the only state left worth reporting is the end
+            // of this cancellation. `.failed` counts too — a listener that failed to bind is
+            // cancelled here as well, and it must not hold the caller for the full timeout.
+            listener.stateUpdateHandler = { state in
+                switch state {
+                case .cancelled, .failed:
+                    finished.signal()
+                default:
+                    break
+                }
+            }
+            listener.newConnectionHandler = nil
+            listener.cancel()
+            return true
         }
+        guard isCancelling else { return }
+        _ = finished.wait(timeout: .now() + Self.cancelTimeout)
     }
 
     // MARK: - Listener callbacks (on `queue`)
@@ -374,7 +420,7 @@ private final class LoopbackEngine: @unchecked Sendable {
 
     private func handleRequest(head: Data, id: ObjectIdentifier) {
         assertOnQueue()
-        let request = LoopbackRequest(head: head)
+        let request = LoopbackRequest(head: head, callbackPath: callbackPath)
         switch phase {
         case .awaiting:
             guard let code = request.callbackCode(matchingState: expectedState) else {
@@ -471,8 +517,10 @@ private struct LoopbackRequest {
     let isGET: Bool
     let path: String
     let queryItems: [URLQueryItem]
+    let callbackPath: String
 
-    init(head: Data) {
+    init(head: Data, callbackPath: String) {
+        self.callbackPath = callbackPath
         // Invalid UTF-8 decodes to replacement characters, which simply fail the checks
         // below — a malformed request is a 404, not a crash.
         let text = String(decoding: head, as: UTF8.self)
@@ -481,18 +529,18 @@ private struct LoopbackRequest {
         isGET = fields.first == "GET"
         // Browsers send an origin-form target (`/callback?…`); parsing it against a dummy
         // authority yields percent-decoded query values (covered by a test). Any other target
-        // shape simply fails the `/callback` path check below.
+        // shape simply fails the callback-path check below.
         let components = fields.count > 1 ? URLComponents(string: "http://127.0.0.1" + fields[1]) : nil
         path = components?.path ?? ""
         queryItems = components?.queryItems ?? []
     }
 
-    var isCallbackGET: Bool { isGET && path == "/callback" }
+    var isCallbackGET: Bool { isGET && path == callbackPath }
 
-    /// The authorization code, only if this is a `GET /callback` carrying a non-empty
-    /// `code` and a `state` equal to `expected`. The state check is the flow's anti-CSRF
-    /// control: without it the listener would accept a code injected by any local process
-    /// or hostile page that guessed the port.
+    /// The authorization code, only if this is a `GET` of the configured callback path
+    /// carrying a non-empty `code` and a `state` equal to `expected`. The state check is the
+    /// flow's anti-CSRF control: without it the listener would accept a code injected by any
+    /// local process or hostile page that guessed the port.
     func callbackCode(matchingState expected: String) -> String? {
         guard isCallbackGET else { return nil }
         guard let code = queryItems.first(where: { $0.name == "code" })?.value, !code.isEmpty else { return nil }

@@ -214,6 +214,54 @@ struct LoopbackServerTests {
         await reused.stop()
     }
 
+    @Test("A custom callback path is honored and the default path is rejected under it")
+    func customCallbackPath() async throws {
+        let server = LoopbackServer(callbackPath: "/auth/callback")
+        let port = try await server.start()
+        async let captured = server.waitForCallback(expectedState: "st8", timeout: 5)
+        #expect(try await get(port: port, path: "/callback?code=x&state=st8").status == 404)
+        #expect(try await get(port: port, path: "/auth/callback?code=good&state=st8").status == 200)
+        #expect(await captured == "good")
+        await server.stop()
+    }
+
+    @Test("A fixed port rebinds immediately after serving a callback (no TIME_WAIT lockout)")
+    func fixedPortRebindsAfterServing() async throws {
+        // Pick a free port the OS hands out, release it, then treat it as "fixed". `PortHog`
+        // rather than a `LoopbackServer`: its POSIX `close()` releases the port before it
+        // returns, so this setup step cannot itself leave the port briefly taken.
+        let probe = try PortHog()
+        let port = probe.port
+        probe.close()
+
+        let first = LoopbackServer(gracePeriod: 0, requestedPort: port)
+        #expect(try await first.start() == port)
+        async let captured = first.waitForCallback(expectedState: "st8", timeout: 5)
+        #expect(try await get(port: port, path: "/callback?code=c&state=st8").status == 200)
+        #expect(await captured == "c")
+        await first.stop()
+
+        // Without endpoint reuse this bind fails with EADDRINUSE for ~30 s after the served
+        // connection closed. The user-visible symptom was "Port 1455 is in use" on Try again.
+        let second = LoopbackServer(gracePeriod: 0, requestedPort: port)
+        #expect(try await second.start() == port)
+        await second.stop()
+    }
+
+    @Test("A fixed port held by a live listener still fails to bind, with reuse on")
+    func fixedPortConflictStillDetected() async throws {
+        // `PortHog()` binds and listens on an OS-assigned port with a plain POSIX socket
+        // (no SO_REUSEPORT) — the same shape as Codex CLI's own listener. Same setup as the
+        // existing `bindFailure` test; the difference is the fixed-port reuse flag under test.
+        let hog = try PortHog()
+        defer { hog.close() }
+        let server = LoopbackServer(gracePeriod: 0, requestedPort: hog.port)
+        await #expect(throws: LoopbackServer.StartError.self) {
+            _ = try await server.start()
+        }
+        await server.stop()
+    }
+
     // MARK: - HTTP helpers
 
     private struct Reply {
