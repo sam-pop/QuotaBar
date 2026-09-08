@@ -60,7 +60,9 @@ enum OpenAIUsage {
         AccountIdentity(uuid: response.accountID, email: response.email, displayName: nil)
     }
 
-    private struct MissingWindow: Error {}
+    private struct MissingWindow: LocalizedError {
+        var errorDescription: String? { "Usage response had no primary window" }
+    }
 
     /// `""` for a missing epoch: `UsageSnapshot`'s parser turns it into a nil reset date.
     private static func iso8601(_ epoch: Double?) -> String {

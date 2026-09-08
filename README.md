@@ -77,7 +77,7 @@ When the API reports model-scoped weekly limits (e.g. **Fable**), each account's
 
 ## OpenAI / Codex accounts
 
-**Add account… → OpenAI / Codex** opens auth.openai.com in your browser; sign in with the ChatGPT account you use for Codex. OpenAI pins the login's callback to `http://localhost:1455/auth/callback`, so the app listens on port 1455 for the few seconds the login takes. If Codex CLI is signing in at the same moment you'll see "Port 1455 is in use" — just try again. There is no paste-code fallback for OpenAI logins.
+**Add account… → OpenAI / Codex** opens auth.openai.com in your browser; sign in with the ChatGPT account you use for Codex. OpenAI pins the login's callback to `http://localhost:1455/auth/callback`, so the app listens on port 1455 while the login is in progress. If Codex CLI is signing in at the same moment you'll see "Port 1455 is in use" — just try again. There is no paste-code fallback for OpenAI logins.
 
 **Add account… → Import from Codex CLI** copies the login from `~/.codex/auth.json` (or `$CODEX_HOME/auth.json`) into the app as a new account, with no browser round trip. Only a ChatGPT-mode Codex login can be imported (not an API key). The file is only ever read. From then on the app refreshes that login itself; Codex CLI keeps its own.
 
@@ -175,6 +175,7 @@ ClaudeUsageBar/
 │   ├── Models/
 │   │   ├── UsageData.swift          # API response + snapshot + history
 │   │   ├── Account.swift            # Account identity + AccountsStore (accounts.v1)
+│   │   ├── Provider.swift           # Which vendor an account belongs to (Claude / OpenAI)
 │   │   └── AccountPersistence.swift # Per-account snapshot/history (namespaced)
 │   ├── Logic/                       # Pure, unit-tested units
 │   │   ├── MenuBarSelection.swift   # Which window a single account shows
@@ -188,16 +189,22 @@ ClaudeUsageBar/
 │   │   ├── OAuthRefreshOutcome.swift   # Classifies refresh-token failures
 │   │   ├── AccountIdentityResolver.swift # Backfills/dedupes accounts by OAuth identity
 │   │   ├── LoginAffordance.swift    # Login state → the controls the popover offers
+│   │   ├── LoginExpiry.swift        # Refresh-token expiry → warning + notification days
 │   │   └── RetryPolicy.swift        # Exponential-backoff calculator
 │   ├── Services/
 │   │   ├── KeychainService.swift    # OAuth refresh (proactive/reactive) + legacy migration read
 │   │   ├── CredentialStore.swift    # (legacy single-item store, migration source)
 │   │   ├── AccountCredentialStore.swift # Single-item multi-account Keychain map + manager
 │   │   ├── AccountMigration.swift   # One-time single→multi migration (idempotent, safe)
+│   │   ├── ProviderAdapter.swift    # Per-vendor seam: login, identity, usage, refresh
 │   │   ├── OAuthPKCE.swift          # Verifier/challenge/state generation
 │   │   ├── OAuthLoginModels.swift   # Authorize-URL building + paste-mode code#state parsing
 │   │   ├── OAuthLoginService.swift  # Authorization-code exchange (fresh browser login)
 │   │   ├── LoopbackServer.swift     # Local HTTP callback listener for loopback-mode login
+│   │   ├── OpenAIOAuthModels.swift  # OpenAI endpoints + pinned localhost:1455 redirect
+│   │   ├── OpenAILoginService.swift # OpenAI token exchange/refresh body + decoding
+│   │   ├── OpenAIUsageService.swift # ChatGPT rate-limit response → usage + identity
+│   │   ├── CodexAuthFile.swift      # Reads ~/.codex/auth.json for the CLI-login import
 │   │   ├── ProfileService.swift     # GET /api/oauth/profile (account identity)
 │   │   └── UsageAPIService.swift    # Usage API client + error classification
 │   ├── ViewModels/
@@ -211,6 +218,7 @@ ClaudeUsageBar/
 │       ├── UsageSectionView.swift   # Card with bar + live countdown
 │       ├── UsageColor.swift         # Level → SwiftUI color
 │       ├── AccountColor.swift       # Per-account accent color
+│       ├── ProviderShape.swift      # Menu-bar provider mark (dot / star / hexagon)
 │       ├── AccountRowView.swift     # One account's popover block (+ edit/remove)
 │       ├── LoginPill.swift          # Login/re-auth controls (start, paste, retry, cancel)
 │       ├── UsageMatrixView.swift    # Side-by-side comparison table for 2+ accounts

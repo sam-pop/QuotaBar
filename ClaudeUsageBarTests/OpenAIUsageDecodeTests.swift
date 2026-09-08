@@ -5,7 +5,7 @@ import Foundation
 struct OpenAIUsageDecodeTests {
     /// Trimmed from the design spike's live response (spec §2 O1).
     private let fixture = #"""
-    {"user_id":"user-x","account_id":"55f9262b-efec-4c8f-b94f-cfad13ad735b","email":"sam@example.com","plan_type":"team",
+    {"user_id":"user-x","account_id":"0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d","email":"sam@example.com","plan_type":"team",
      "rate_limit":{"allowed":true,"limit_reached":false,
        "primary_window":{"used_percent":52,"limit_window_seconds":18000,"reset_after_seconds":15891,"reset_at":1788845315},
        "secondary_window":{"used_percent":52.6,"limit_window_seconds":604800,"reset_after_seconds":499180,"reset_at":1789328604}},
@@ -32,7 +32,7 @@ struct OpenAIUsageDecodeTests {
     @Test("Identity comes from account_id and email; displayName is nil")
     func identity() throws {
         let identity = OpenAIUsage.identity(from: try OpenAIUsage.decode(Data(fixture.utf8)))
-        #expect(identity == AccountIdentity(uuid: "55f9262b-efec-4c8f-b94f-cfad13ad735b", email: "sam@example.com", displayName: nil))
+        #expect(identity == AccountIdentity(uuid: "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d", email: "sam@example.com", displayName: nil))
     }
 
     @Test("A missing secondary window becomes 0% with no reset; a missing primary window is a decode failure")

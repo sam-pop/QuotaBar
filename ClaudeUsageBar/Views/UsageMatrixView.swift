@@ -153,7 +153,15 @@ struct UsageMatrixView: View {
             } label: {
                 pill(text: warning, systemImage: "clock.badge.exclamationmark", tint: .orange)
             }
-            .buttonStyle(.plain).help("Opens claude.ai in your browser to sign in")
+            .buttonStyle(.plain).help(loginHelp(for: column.account.id))
+        }
+    }
+
+    /// Provider-aware like `LoginPill`'s own help — this line starts the same login.
+    private func loginHelp(for accountID: UUID) -> String {
+        switch viewModel.loginProvider(for: accountID) {
+        case .anthropic: return "Opens claude.ai in your browser to sign in"
+        case .openai: return "Opens auth.openai.com in your browser to sign in"
         }
     }
 

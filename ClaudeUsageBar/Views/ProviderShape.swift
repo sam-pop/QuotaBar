@@ -40,7 +40,7 @@ enum ProviderShape: Equatable {
             let r = rect.width / 2
             let path = NSBezierPath()
             for i in 0..<6 {
-                let angle = CGFloat(i) * .pi / 3 + .pi / 6   // flat top and bottom
+                let angle = CGFloat(i) * .pi / 3 + .pi / 6   // pointy top, flat left and right sides
                 let p = NSPoint(x: c.x + r * cos(angle), y: c.y + r * sin(angle))
                 if i == 0 { path.move(to: p) } else { path.line(to: p) }
             }

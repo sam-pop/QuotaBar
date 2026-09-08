@@ -17,10 +17,10 @@ import Network
 ///
 /// Lifecycle: `start()` → `waitForCallback(expectedState:timeout:)` → `stop()`. Shutdown is
 /// the caller's job: the server does not tear itself down on success, so the browser tab
-/// finishes loading the success page. `stop()` is idempotent, requests cancellation before
-/// it returns (the port has been immediately re-bindable in practice — see the
-/// `Ports are released between logins` test), and is safe to call while a wait is in flight
-/// (the waiter is then resumed with `nil`).
+/// finishes loading the success page. `stop()` is idempotent, waits up to one second for the
+/// listener to report that it has cancelled — so the port is re-bindable when it returns
+/// (covered by `fixedPortRebindsAfterServing`) — and is safe to call while a wait is in
+/// flight (the waiter is then resumed with `nil`).
 ///
 /// Start the wait BEFORE opening the browser: until `waitForCallback` arms the listener, a
 /// callback would be answered `404` like any other stray request.
@@ -35,7 +35,6 @@ actor LoopbackServer {
     private let engine: LoopbackEngine
     private let requestedPort: UInt16
     private let gracePeriod: TimeInterval
-    private let callbackPath: String
 
     private var port: UInt16?
     private var waiter: CheckedContinuation<String?, Never>?
@@ -58,7 +57,6 @@ actor LoopbackServer {
     init(gracePeriod: TimeInterval = 600, requestedPort: UInt16 = 0, callbackPath: String = "/callback") {
         self.gracePeriod = gracePeriod
         self.requestedPort = requestedPort
-        self.callbackPath = callbackPath
         self.engine = LoopbackEngine(callbackPath: callbackPath)
     }
 
@@ -292,11 +290,8 @@ private final class LoopbackEngine: @unchecked Sendable {
     /// and on every open connection, and the listener has reported that it finished cancelling
     /// — so the port is free for an immediate rebind.
     ///
-    /// The wait is what makes that last part true. Merely *requesting* the cancel left a
-    /// window of a few hundred microseconds in which rebinding the same fixed port still
-    /// failed with EADDRINUSE: `fixedPortRebindsAfterServing` failed 5 runs in 8 without it,
-    /// on binds where no connection had ever been served (so TIME_WAIT could not explain it)
-    /// and where a retry succeeded 0.3–0.6 ms later.
+    /// The wait is what makes that last part true. Without the wait, an immediate rebind of
+    /// the same fixed port intermittently failed — see `fixedPortRebindsAfterServing`.
     ///
     /// Capped at `cancelTimeout`, because `endLogin`/`cancelLogin` await this before any later
     /// login can start: a listener that never reports back must not freeze them.

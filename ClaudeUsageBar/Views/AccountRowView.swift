@@ -117,9 +117,17 @@ struct AccountRowView: View {
                         }
                     }
                     .buttonStyle(.plain)
-                    .help("Opens claude.ai in your browser to sign in")
+                    .help(loginHelp)
                 }
             }
+        }
+    }
+
+    /// Provider-aware like `LoginPill`'s own help — this line starts the same login.
+    private var loginHelp: String {
+        switch viewModel.loginProvider(for: account.id) {
+        case .anthropic: return "Opens claude.ai in your browser to sign in"
+        case .openai: return "Opens auth.openai.com in your browser to sign in"
         }
     }
 

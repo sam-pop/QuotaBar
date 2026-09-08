@@ -128,11 +128,18 @@ struct UsagePopoverView: View {
                 Text(error).font(.caption2).foregroundStyle(.secondary)
                     .multilineTextAlignment(.center).lineLimit(3)
             } else {
-                Text("Sign in with the browser — one account at a time.")
+                Text(addCaption)
                     .font(.caption2).foregroundStyle(.tertiary)
             }
         }
         .padding(.horizontal, 16).padding(.vertical, 8)
+    }
+
+    /// The generic line, unless the probe found a Codex login it can't use: the import item
+    /// is disabled then, and a disabled menu item can't say why on its own.
+    private var addCaption: String {
+        if case .unusable(let reason) = viewModel.codexImport { return reason }
+        return "One account at a time — sign in with the browser, or import Codex CLI's login."
     }
 
     /// Why the import item is offered or disabled — the probe's own reason, so a Codex login

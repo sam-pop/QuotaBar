@@ -6,8 +6,8 @@ import Foundation
 /// (what `AccountsViewModel.finishLogin` classifies), the refresh path speaks
 /// `KeychainServiceError.refreshFailed` — the only error this decoder can throw that
 /// `OAuthRefreshOutcome.classify` reads a status from, and so the only one that can count
-/// toward the circuit breaker. Any other error type classifies as transient, and the
-/// breaker would never trip on a dead refresh token.
+/// toward the circuit breaker. An `OAuthLoginError` thrown here instead would classify as
+/// transient, and the breaker would never trip on a dead refresh token.
 enum OpenAIOAuthExchange {
     private struct Grant: Decodable {
         let access_token: String

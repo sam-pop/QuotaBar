@@ -29,7 +29,7 @@ struct ProviderShapeTests {
         }
     }
 
-    @Test("A mixed-provider bar image is wider than a single-provider one with the same accounts (the glyph is drawn) in both compact and Bars modes")
+    @Test("A mixed-provider bar is wider in Bars mode and the same width but a different image in compact mode")
     func mixedBarDrawsGlyph() {
         let a = Account(label: "P", provider: .anthropic)
         // `b` and `c` share a label so the two images differ only by provider: the fonts are
@@ -46,5 +46,6 @@ struct ProviderShapeTests {
         // Compact mode replaces the dot with a same-size glyph, so the width is unchanged;
         // the rule is what changes, and it is pinned by `rule()` above.
         #expect(mixedCompact.size.width == singleCompact.size.width)
+        #expect(mixedCompact.tiffRepresentation != singleCompact.tiffRepresentation)
     }
 }

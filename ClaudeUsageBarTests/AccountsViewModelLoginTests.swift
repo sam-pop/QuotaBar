@@ -1027,6 +1027,7 @@ struct AccountsViewModelBrowserLoginTests {
         let account = Account(label: "Work", accountUUID: "acct-A")
         let vm = makeVM(script, accounts: [account], store: InMemoryAccountCredentialStore())
 
+        await vm.refreshAll()   // the init's own refresh, awaited: `needsReAuth` below reads its result
         await vm.beginLogin(account.id)
         #expect(vm.loginAffordance(for: account.id).actions == [.tryAgain, .dismiss])
 
