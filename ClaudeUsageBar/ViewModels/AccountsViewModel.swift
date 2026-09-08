@@ -324,8 +324,9 @@ final class AccountsViewModel: ObservableObject {
         await beginLogin(nil)
     }
 
-    /// Whether the flow's provider can finish a login by paste. Drives which controls
-    /// `LoginPill` offers.
+    /// Whether the flow's provider can finish a login by paste — the live login's provider
+    /// while one is running (see `loginProvider(for:)`). Drives which controls `LoginPill`
+    /// offers, and guards `switchToPaste()`.
     func supportsPaste(for accountID: UUID?) -> Bool {
         deps.adapters.adapter(for: loginProvider(for: accountID)).supportsPaste
     }
@@ -713,9 +714,16 @@ final class AccountsViewModel: ObservableObject {
         if let accountID { loginState[accountID] = state } else { addLoginState = state }
     }
 
-    /// The provider whose adapter serves one login flow: an existing account's own provider,
-    /// or, for the add-account flow, the provider most recently chosen for it.
+    /// The provider whose adapter serves one login flow: the live login's own provider when
+    /// this flow owns one, else an existing account's provider, else — for the add-account
+    /// flow — the provider most recently chosen for it.
+    ///
+    /// The live login comes first because `addLoginProvider` can move while a login is
+    /// running: a second "Add" click writes it and is then refused by the
+    /// one-login-at-a-time rule, which would otherwise leave the controls describing a
+    /// provider the pending login is not using.
     func loginProvider(for accountID: UUID?) -> Provider {
+        if let pending = pendingLogin, pending.accountID == accountID { return pending.provider }
         guard let accountID, let account = accounts.first(where: { $0.id == accountID }) else {
             return addLoginProvider
         }

@@ -143,6 +143,7 @@ struct AccountsViewModelOpenAILoginTests {
         #expect(script.openAIBeginCalls == 1)
         #expect(vm.pendingLogin == nil)
         #expect(script.notifications.contains { $0.content.body.contains("paste") } == false)
+        #expect(script.notifications.count == 1)   // the failure only; no paste prompt alongside it
         #expect(script.notifications.last?.content.body == "The login timed out — try again.")
     }
 
@@ -158,6 +159,29 @@ struct AccountsViewModelOpenAILoginTests {
         #expect(script.openAIBeginCalls == 1)
         #expect(script.anthropicBeginCalls == 0)
         #expect(vm.loginState[account.id] == .failed("That browser is signed into other@example.com — expected “Codex”."))
+    }
+
+    @Test("A second Add click while an OpenAI login is pending can't turn it into a paste login")
+    func pendingProviderWinsOverALaterAddChoice() async {
+        let script = Script()
+        // The identity step fails with the grant still in hand, which parks the login in
+        // `identityFailed` — still holding the one pending slot.
+        script.openAIIdentity = .failure(StubError())
+        let vm = makeVM(script)
+
+        await vm.beginAddAccountLogin(provider: .openai)
+        let pending = vm.pendingLogin
+        #expect(pending?.provider == .openai)
+
+        // The one-login-at-a-time rule refuses this silently — but it has already moved
+        // `addLoginProvider`, so the controls must still follow the login that is running.
+        await vm.beginAddAccountLogin(provider: .anthropic)
+
+        #expect(vm.supportsPaste(for: nil) == false)
+        await vm.switchToPaste()
+        #expect(vm.pendingLogin == pending)      // the OpenAI login is untouched…
+        #expect(script.openAIBeginCalls == 1)    // …and nothing was restarted
+        #expect(script.anthropicBeginCalls == 0)
     }
 
     @Test("The add-flow affordance hides the paste action for OpenAI and keeps it for Claude")
