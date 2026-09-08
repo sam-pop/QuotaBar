@@ -11,13 +11,16 @@ enum AccountIdentityResolver {
         let duplicateOfLabel: String?
     }
 
-    static func backfill(_ accounts: [Account], id: UUID, uuid: String, email: String?) -> Result {
+    static func backfill(_ accounts: [Account], id: UUID, provider: Provider,
+                         uuid: String, email: String?) -> Result {
         guard let index = accounts.firstIndex(where: { $0.id == id }) else {
             return Result(accounts: accounts, duplicateOfLabel: nil)
         }
 
-        // A different account already carrying this identity is a duplicate.
-        let duplicate = accounts.first { $0.id != id && $0.accountUUID == uuid }
+        // A different account of the same provider already carrying this identity is a
+        // duplicate. Identities are only comparable within a provider: an Anthropic account
+        // UUID and a ChatGPT account id live in different namespaces.
+        let duplicate = accounts.first { $0.id != id && $0.provider == provider && $0.accountUUID == uuid }
 
         var updated = accounts
         updated[index].accountUUID = uuid

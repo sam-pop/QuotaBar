@@ -271,7 +271,7 @@ final class AccountsViewModel: ObservableObject {
               let identity = try? await deps.adapters.adapter(for: account.provider).fetchIdentity(token)
         else { return }
 
-        let result = AccountIdentityResolver.backfill(accounts, id: id,
+        let result = AccountIdentityResolver.backfill(accounts, id: id, provider: account.provider,
                                                       uuid: identity.uuid, email: identity.email)
         accounts = result.accounts
         accountsStore.save(accounts)
@@ -599,10 +599,12 @@ final class AccountsViewModel: ObservableObject {
         // A migrated account has no identity until a login supplies one. If that identity
         // already belongs to another account, the credentials belong in that slot: applying
         // the backfill here would leave two accounts claiming one identity.
-        let resolved = AccountIdentityResolver.backfill(accounts, id: accountID,
+        let resolved = AccountIdentityResolver.backfill(accounts, id: accountID, provider: account.provider,
                                                         uuid: identity.uuid, email: identity.email)
         if resolved.duplicateOfLabel != nil,
-           let duplicate = accounts.first(where: { $0.id != accountID && $0.accountUUID == identity.uuid }) {
+           let duplicate = accounts.first(where: {
+               $0.id != accountID && $0.provider == account.provider && $0.accountUUID == identity.uuid
+           }) {
             await storeAndFinish(
                 grant, for: duplicate.id, owner: accountID,
                 notice: "That login is already tracked as “\(duplicate.label)” — its login was refreshed instead.")
@@ -615,9 +617,10 @@ final class AccountsViewModel: ObservableObject {
 
     private func completeAddAccount(_ grant: CachedCredentials, identity: AccountIdentity,
                                     provider: Provider) async {
-        // Dedupe on the stable account uuid: logging into an account that is already tracked
-        // refreshes it instead of creating a second copy.
-        if let existing = accounts.first(where: { $0.accountUUID == identity.uuid }) {
+        // Dedupe on (provider, account uuid): logging into an account that is already tracked
+        // refreshes it instead of creating a second copy, while the same id or email under
+        // another provider stays a separate account.
+        if let existing = accounts.first(where: { $0.provider == provider && $0.accountUUID == identity.uuid }) {
             await storeAndFinish(grant, for: existing.id, owner: nil,
                                  notice: "“\(existing.label)” is already tracked — its login was refreshed.")
             return

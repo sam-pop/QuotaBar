@@ -192,4 +192,30 @@ struct AccountsViewModelOpenAILoginTests {
         await vm.beginAddAccountLogin(provider: .openai)
         #expect(vm.supportsPaste(for: nil) == false)
     }
+    @Test("A Claude account and an OpenAI account with the same email and id are two accounts")
+    func crossProviderIsNotADuplicate() async {
+        let script = Script()
+        let claude = Account(label: "Work", accountUUID: "cg-1", email: "sam@example.com", provider: .anthropic)
+        let vm = makeVM(script, accounts: [claude])
+
+        await vm.beginAddAccountLogin(provider: .openai)
+
+        #expect(vm.accounts.count == 2)
+        #expect(vm.accounts.map(\.provider) == [.anthropic, .openai])
+        #expect(vm.addLoginState == .idle)
+    }
+
+    @Test("Adding an OpenAI account that is already tracked refreshes it instead of duplicating")
+    func sameProviderDedupes() async throws {
+        let script = Script()
+        let existing = Account(label: "Codex", accountUUID: "cg-1", email: "sam@example.com", provider: .openai)
+        let store = InMemoryAccountCredentialStore([existing.id: CachedCredentials(accessToken: "old", refreshToken: "r", expiresAt: nil, provider: .openai)])
+        let vm = makeVM(script, accounts: [existing], store: store)
+
+        await vm.beginAddAccountLogin(provider: .openai)
+
+        #expect(vm.accounts.count == 1)
+        #expect(try store.loadAll()[existing.id]?.accessToken == "oa-token")
+        #expect(vm.addLoginState == .notice("“Codex” is already tracked — its login was refreshed."))
+    }
 }
