@@ -1,6 +1,6 @@
 # OpenAI / Codex Provider — Design (v2, post-audit)
 
-**Date:** 2026-09-07 · **Status:** audited; awaiting user review of this spec; probe O3 pending (gates §6 only)
+**Date:** 2026-09-07 · **Status:** implemented on sam-pop/add-OpenAI (commits 744d394..31d819a); probe O3 pending — runs 2026-09-08 after 21:10 EDT, result recorded here by the lead
 **Builds on:** `2026-08-21-browser-oauth-login-design.md` (the app owns its credentials; browser OAuth + PKCE per account). Its invariants — exactly one pending login, single-use pending login, zero I/O in view-model `init`, no `try?` on credential writes — all still hold here.
 **Audit trail:** v1 hardened by one independent Opus audit (3 blockers, 9 majors, 11 minors, 12 traced scenarios) + the lead security pass. Every finding is folded in below; §13 lists them with their resolution.
 
