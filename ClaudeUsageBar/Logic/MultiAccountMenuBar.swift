@@ -66,6 +66,13 @@ enum MultiAccountMenuBar {
         percents.max()
     }
 
+    /// Whether the bar marks each account with its provider's shape instead of a dot: only
+    /// when the tracked accounts span more than one provider. A single-provider install —
+    /// all Claude, or all OpenAI — renders exactly as before.
+    static func providerShapes(for providers: [Provider]) -> Bool {
+        Set(providers).count > 1
+    }
+
     /// The per-account window tag ("5h"/"7d") to show beside each percent. Only meaningful
     /// in **auto** mode, where each account independently picks its higher window and the
     /// bare numbers would otherwise be incomparable. In an explicit 5h/7d mode every account

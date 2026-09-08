@@ -38,8 +38,9 @@ enum MenuBarImage {
         return image
     }
 
-    /// The multi-account compact image: a colored dot + `X 45%` segment per account,
-    /// separated by a middot. Text uses the dynamic label color so it adapts to light/dark.
+    /// The multi-account compact image: a colored dot — or, when providers are mixed, the
+    /// provider's shape — + `X 45%` segment per account, separated by a middot. Text uses
+    /// the dynamic label color so it adapts to light/dark.
     static func multiAccount(
         accounts: [Account],
         snapshots: [UUID: UsageSnapshot],
@@ -49,14 +50,16 @@ enum MenuBarImage {
             for: accounts.map(\.label),
             overrides: accounts.map(\.shortCode)
         )
-        struct Segment { let dotColor: NSColor?; let text: String; let tag: String? }
+        let mixed = MultiAccountMenuBar.providerShapes(for: accounts.map(\.provider))
+        struct Segment { let dotColor: NSColor?; let text: String; let tag: String?; let shape: ProviderShape }
         let segments: [Segment] = zip(prefixes, accounts).map { prefix, account in
+            let shape = ProviderShape.mark(for: account.provider, mixed: mixed)
             if let snapshot = snapshots[account.id],
                let active = MenuBarSelection.active(mode: mode, snapshot: snapshot) {
                 let tag = MultiAccountMenuBar.windowTag(mode: mode, window: active.window)
-                return Segment(dotColor: levelColor(active.percent), text: "\(prefix) \(active.percent)%", tag: tag)
+                return Segment(dotColor: levelColor(active.percent), text: "\(prefix) \(active.percent)%", tag: tag, shape: shape)
             }
-            return Segment(dotColor: nil, text: "\(prefix) --%", tag: nil)
+            return Segment(dotColor: nil, text: "\(prefix) --%", tag: nil, shape: shape)
         }
 
         let font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
@@ -95,8 +98,8 @@ enum MenuBarImage {
                 }
                 if let dot = segment.dotColor {
                     dot.setFill()
-                    NSBezierPath(ovalIn: NSRect(x: x, y: (height - dotDiameter) / 2,
-                                                width: dotDiameter, height: dotDiameter)).fill()
+                    segment.shape.path(in: NSRect(x: x, y: (height - dotDiameter) / 2,
+                                                  width: dotDiameter, height: dotDiameter)).fill()
                     x += dotDiameter + dotGap
                 }
                 let str = NSAttributedString(string: segment.text, attributes: textAttrs)
@@ -138,18 +141,28 @@ enum MenuBarImage {
             .foregroundColor: NSColor.secondaryLabelColor,
         ]
 
-        struct Cluster { let prefix: String; let p5: Int?; let p7: Int?; let num5: String; let num7: String }
+        let mixed = MultiAccountMenuBar.providerShapes(for: accounts.map(\.provider))
+        // `shape` is nil unless providers are mixed; `level` is the cluster's worse window,
+        // which colors the glyph the way the compact bar's dot is colored.
+        struct Cluster {
+            let prefix: String; let p5: Int?; let p7: Int?; let num5: String; let num7: String
+            let shape: ProviderShape?; let level: Int?
+        }
         let clusters: [Cluster] = zip(prefixes, accounts).map { prefix, account in
+            let shape = mixed ? ProviderShape.mark(for: account.provider, mixed: true) : nil
             guard let s = snapshots[account.id] else {
-                return Cluster(prefix: prefix, p5: nil, p7: nil, num5: "--", num7: "--")
+                return Cluster(prefix: prefix, p5: nil, p7: nil, num5: "--", num7: "--",
+                               shape: shape, level: nil)
             }
             let p5 = UsageSnapshot.effectivePercent(s.fiveHourPercent, resetsAt: s.fiveHourResetsAt, now: now)
             let p7 = UsageSnapshot.effectivePercent(s.sevenDayPercent, resetsAt: s.sevenDayResetsAt, now: now)
-            return Cluster(prefix: prefix, p5: p5, p7: p7, num5: "\(p5)%", num7: "\(p7)%")
+            return Cluster(prefix: prefix, p5: p5, p7: p7, num5: "\(p5)%", num7: "\(p7)%",
+                           shape: shape, level: max(p5, p7))
         }
 
         let barW: CGFloat = 26, barH: CGFloat = 4.5
         let gap: CGFloat = 3, prefixGap: CGFloat = 4, clusterGap: CGFloat = 7
+        let glyph: CGFloat = 7, glyphGap: CGFloat = 3
         let height: CGFloat = 20
         let rowCenterTop = height - 6, rowCenterBot: CGFloat = 6
 
@@ -159,7 +172,10 @@ enum MenuBarImage {
         let labelW = max(width("5h", rowLabelAttrs), width("7d", rowLabelAttrs))
         func numW(_ c: Cluster) -> CGFloat { max(width(c.num5, numAttrs), width(c.num7, numAttrs)) }
         func prefixW(_ c: Cluster) -> CGFloat { width(c.prefix, prefixAttrs) }
-        func clusterW(_ c: Cluster) -> CGFloat { prefixW(c) + prefixGap + labelW + gap + barW + gap + numW(c) }
+        func clusterW(_ c: Cluster) -> CGFloat {
+            (c.shape == nil ? 0 : glyph + glyphGap)
+                + prefixW(c) + prefixGap + labelW + gap + barW + gap + numW(c)
+        }
 
         var total: CGFloat = 0
         for (i, c) in clusters.enumerated() {
@@ -176,6 +192,11 @@ enum MenuBarImage {
                     NSColor.tertiaryLabelColor.withAlphaComponent(0.4).setFill()
                     NSBezierPath(rect: NSRect(x: x, y: 3, width: 0.5, height: height - 6)).fill()
                     x += 0.5 + clusterGap
+                }
+                if let shape = c.shape {
+                    (c.level.map(levelColor) ?? NSColor.tertiaryLabelColor).setFill()
+                    shape.path(in: NSRect(x: x, y: (height - glyph) / 2, width: glyph, height: glyph)).fill()
+                    x += glyph + glyphGap
                 }
                 let pfx = NSAttributedString(string: c.prefix, attributes: prefixAttrs)
                 pfx.draw(at: NSPoint(x: x, y: (height - pfx.size().height) / 2))
