@@ -16,8 +16,6 @@ enum LoginAffordance: Equatable {
     /// string it renders. `message` is set when a paste was rejected and the login is still
     /// waiting for a corrected one.
     case awaitingPaste(message: String?)
-    /// The credentials came from Codex CLI's file and the identity check is running.
-    case importing
     /// The grant is in hand but the identity check failed. Distinct from `.failed` because
     /// this flow still holds the pending login: only `retryIdentity()` or `cancelLogin()`
     /// move it, and a fresh `beginLogin` for this account is refused by the
@@ -47,8 +45,6 @@ enum LoginAffordance: Equatable {
             return .waitingForBrowser
         case .awaitingPaste:
             return .awaitingPaste(message: nil)
-        case .importing:
-            return .importing
         case .notice(let message):
             return .notice(message: message)
         case .failed(let message):
@@ -68,7 +64,7 @@ enum LoginAffordance: Equatable {
         switch self {
         case .identityFailed(let message), .failed(let message), .notice(let message): return message
         case .awaitingPaste(let message): return message
-        case .none, .start, .waitingForBrowser, .importing: return nil
+        case .none, .start, .waitingForBrowser: return nil
         }
     }
 
@@ -83,9 +79,6 @@ enum LoginAffordance: Equatable {
             return [.logIn]
         case .waitingForBrowser:
             return supportsPaste ? [.cancel, .copyLink, .usePasteCode] : [.cancel, .copyLink]
-        case .importing:
-            // No browser, so no link to copy and no code to paste — only a way out.
-            return [.cancel]
         case .awaitingPaste:
             // Copy link belongs here too: the page carrying the code is the page this URL
             // opens, so a user who closed that tab can reopen it instead of starting over.

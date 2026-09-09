@@ -44,10 +44,6 @@ struct UsagePopoverView: View {
             footer.padding(.horizontal, 16).padding(.vertical, 10)
         }
         .frame(width: popoverWidth)
-        // The probe reads the filesystem, so it is refreshed when the popover opens rather
-        // than on a timer: a Codex login that appeared (or expired) since last time is
-        // picked up before the menu can offer it.
-        .onAppear { viewModel.refreshCodexImportProbe() }
     }
 
     private var singleAccountList: some View {
@@ -114,12 +110,6 @@ struct UsagePopoverView: View {
                         Task { await viewModel.beginAddAccountLogin(provider: .openai) }
                     } label: { Label { Text("OpenAI / Codex") } icon: { providerMark("ProviderMarkOpenAI") } }
                         .help("Opens auth.openai.com in your browser to sign in with your ChatGPT account")
-                    Divider()
-                    Button {
-                        Task { await viewModel.importFromCodex() }
-                    } label: { Label("Import from Codex CLI", systemImage: "arrow.down.circle") }
-                        .disabled(viewModel.codexImport != .available)
-                        .help(importHelp)
                 } label: {
                     Label("Add account…", systemImage: "plus.circle")
                         .font(.system(size: 12, weight: .medium))
@@ -134,28 +124,11 @@ struct UsagePopoverView: View {
                 Text(error).font(.caption2).foregroundStyle(.secondary)
                     .multilineTextAlignment(.center).lineLimit(3)
             } else {
-                Text(addCaption)
+                Text("One account at a time — sign in with the browser.")
                     .font(.caption2).foregroundStyle(.tertiary)
             }
         }
         .padding(.horizontal, 16).padding(.vertical, 8)
-    }
-
-    /// The generic line, unless the probe found a Codex login it can't use: the import item
-    /// is disabled then, and a disabled menu item can't say why on its own.
-    private var addCaption: String {
-        if case .unusable(let reason) = viewModel.codexImport { return reason }
-        return "One account at a time — sign in with the browser, or import Codex CLI's login."
-    }
-
-    /// Why the import item is offered or disabled — the probe's own reason, so a Codex login
-    /// that is present but unusable (API-key mode, malformed, oversized) says which.
-    private var importHelp: String {
-        switch viewModel.codexImport {
-        case .available: return "Copies the login from ~/.codex/auth.json; Codex CLI keeps its own"
-        case .notFound: return "No Codex CLI login found at ~/.codex/auth.json"
-        case .unusable(let reason): return reason
-        }
     }
 
     // MARK: - Footer

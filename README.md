@@ -21,7 +21,7 @@ It signs in on its own — a browser OAuth login (authorization code + PKCE) str
 
 - Sign in with just a browser — no Claude Code CLI, install, or login required
 - Track one or more Claude accounts, each signed in and refreshing independently
-- Track OpenAI / Codex accounts alongside Claude accounts — sign in with your ChatGPT account, or import Codex CLI's login
+- Track OpenAI / Codex accounts alongside Claude accounts — sign in with your ChatGPT account
 - Compact multi-account menu bar (`P 45% · W 82%`) with editable per-account prefixes
 - Color-coded (green / yellow / red) by usage level
 - Live reset countdowns that tick every second
@@ -80,8 +80,6 @@ When the API reports model-scoped weekly limits (e.g. **Fable**), each account's
 ## OpenAI / Codex accounts
 
 **Add account… → OpenAI / Codex** opens auth.openai.com in your browser; sign in with the ChatGPT account you use for Codex. OpenAI pins the login's callback to `http://localhost:1455/auth/callback`, so the app listens on port 1455 while the login is in progress. If Codex CLI is signing in at the same moment you'll see "Port 1455 is in use" — just try again. There is no paste-code fallback for OpenAI logins.
-
-**Add account… → Import from Codex CLI** copies the login from `~/.codex/auth.json` (or `$CODEX_HOME/auth.json`) into the app as a new account, with no browser round trip. Only a ChatGPT-mode Codex login can be imported (not an API key). The file is only ever read. From then on the app refreshes that login itself; Codex CLI keeps its own.
 
 The browser's current ChatGPT session decides which account signs in. To add a **second** OpenAI account, use **Copy link** on the waiting pill and open it in a browser profile signed into that account.
 
@@ -206,7 +204,6 @@ QuotaBar/
 │   │   ├── OpenAIOAuthModels.swift  # OpenAI endpoints + pinned localhost:1455 redirect
 │   │   ├── OpenAILoginService.swift # OpenAI token exchange/refresh body + decoding
 │   │   ├── OpenAIUsageService.swift # ChatGPT rate-limit response → usage + identity
-│   │   ├── CodexAuthFile.swift      # Reads ~/.codex/auth.json for the CLI-login import
 │   │   ├── ProfileService.swift     # GET /api/oauth/profile (account identity)
 │   │   └── UsageAPIService.swift    # Usage API client + error classification
 │   ├── ViewModels/

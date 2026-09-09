@@ -2,13 +2,10 @@ import Foundation
 
 /// How a login receives its credentials. `loopback` runs a local HTTP server and captures
 /// the browser redirect; `paste` sends the browser to Anthropic's own callback page, which
-/// renders a `code#state` string for the user to copy back into the app; `imported` has no
-/// browser at all — the credentials were read from Codex CLI's login file and only the
-/// identity/store tail of a login runs.
+/// renders a `code#state` string for the user to copy back into the app.
 enum OAuthLoginMode: Equatable {
     case loopback(port: UInt16)
     case paste
-    case imported
 }
 
 /// A browser OAuth login that has been started but not yet completed. `pkce` is the

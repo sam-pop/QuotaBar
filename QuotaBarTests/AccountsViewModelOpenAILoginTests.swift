@@ -21,9 +21,6 @@ struct AccountsViewModelOpenAILoginTests {
         var openAIUsageCalls = 0
         var notifications: [UNNotificationRequest] = []
         var openedCount = 0
-        var codexProbe: CodexAuthFile.Probe = .available
-        var codexRead: Result<CachedCredentials, Error> = .success(
-            CachedCredentials(accessToken: "codex-access", refreshToken: "codex-refresh", expiresAt: nil, provider: .openai))
     }
 
     private func ephemeralDefaults() -> UserDefaults {
@@ -82,9 +79,7 @@ struct AccountsViewModelOpenAILoginTests {
             resolveLegacyCredentials: { nil },
             deleteLegacyArtifacts: {},
             requestNotificationAuthorization: { nil },
-            addNotification: { script.notifications.append($0) },
-            probeCodexAuthFile: { script.codexProbe },
-            readCodexAuthFile: { try script.codexRead.get() })
+            addNotification: { script.notifications.append($0) })
     }
 
     private func makeVM(_ script: Script, accounts: [Account] = [], store: AccountCredentialStoring = InMemoryAccountCredentialStore()) -> AccountsViewModel {
@@ -239,76 +234,7 @@ struct AccountsViewModelOpenAILoginTests {
         #expect(vm.addLoginProvider == .openai)
     }
 
-    @Test("Import from Codex: no browser, identity via the OpenAI adapter, account stored as openai")
-    func importHappyPath() async throws {
-        let script = Script()
-        let store = InMemoryAccountCredentialStore()
-        let vm = makeVM(script, store: store)
-
-        await vm.importFromCodex()
-
-        #expect(script.openedCount == 0)
-        #expect(script.openAIBeginCalls == 0)
-        #expect(vm.accounts.count == 1)
-        let account = try #require(vm.accounts.first)
-        #expect(account.provider == .openai)
-        #expect(try store.loadAll()[account.id]?.accessToken == "codex-access")
-        #expect(vm.pendingLogin == nil)
-        #expect(vm.addLoginState == .idle)
-        #expect(vm.addLoginProvider == .openai)
-    }
-
-    @Test("Import is refused while a login is pending, and leaves that login untouched")
-    func importRefusedWhilePending() async {
-        let script = Script()
-        // Park a re-auth login in `identityFailed`: a transport failure on the identity step
-        // keeps the grant in memory and the pending slot held, exactly the state a concurrent
-        // import must not disturb.
-        let account = Account(label: "Codex", accountUUID: "cg-1", provider: .openai)
-        let vm = makeVM(script, accounts: [account])
-        script.openAIIdentity = .failure(UsageAPIError.requestFailed(URLError(.notConnectedToInternet)))
-        await vm.beginLogin(account.id)
-        #expect(vm.canRetryIdentity(for: account.id))
-        let pendingBefore = vm.pendingLogin
-
-        await vm.importFromCodex()
-
-        #expect(vm.addLoginState == .failed("Finish the login in progress first."))
-        #expect(vm.pendingLogin == pendingBefore)
-        #expect(vm.canRetryIdentity(for: account.id))
-    }
-
-    @Test("An expired Codex token fails identity with the expired message and keeps Retry")
-    func importExpiredToken() async {
-        let script = Script()
-        script.openAIIdentity = .failure(UsageAPIError.invalidResponse(401))
-        let vm = makeVM(script)
-
-        await vm.importFromCodex()
-
-        #expect(vm.addLoginState == .failed("Codex's login has expired — sign in with the browser instead."))
-        #expect(vm.canRetryIdentity(for: nil))
-        #expect(vm.loginAffordance(for: nil) == .identityFailed(message: "Codex's login has expired — sign in with the browser instead."))
-
-        script.openAIIdentity = .success(AccountIdentity(uuid: "cg-1", email: "sam@example.com", displayName: nil))
-        await vm.retryIdentity()
-        #expect(vm.accounts.count == 1)
-        #expect(vm.addLoginState == .idle)
-    }
-
-    @Test("An import whose identity check can't reach the server keeps the generic verify message")
-    func importTransportFailureIsNotReportedAsExpired() async {
-        let script = Script()
-        script.openAIIdentity = .failure(UsageAPIError.requestFailed(URLError(.notConnectedToInternet)))
-        let vm = makeVM(script)
-
-        await vm.importFromCodex()
-
-        // Offline says nothing about the imported token, so Retry is worth pressing.
-        #expect(vm.addLoginState == .failed("Logged in, but couldn't verify the account — Retry."))
-    }
-
-    @Test("A browser login rejected with 401 keeps the generic message — the expired copy is import-only")
+    @Test("A login whose identity check is rejected with 401 keeps the generic verify message")
     func browserLoginRejectionIsNotReportedAsExpired() async {
         let script = Script()
         script.openAIIdentity = .failure(UsageAPIError.invalidResponse(401))
@@ -316,22 +242,8 @@ struct AccountsViewModelOpenAILoginTests {
 
         await vm.beginAddAccountLogin(provider: .openai)
 
-        // Nothing was imported here: telling the user Codex's login expired would point at a
-        // file this login never read.
+        // A rejected identity call says nothing about which account signed in, so the message
+        // stays the generic one — with Retry, which is the only way forward.
         #expect(vm.addLoginState == .failed("Logged in, but couldn't verify the account — Retry."))
-    }
-
-    @Test("Importing an OpenAI account that is already tracked refreshes it")
-    func importDedupes() async throws {
-        let script = Script()
-        let existing = Account(label: "Codex", accountUUID: "cg-1", provider: .openai)
-        let store = InMemoryAccountCredentialStore([existing.id: CachedCredentials(accessToken: "old", refreshToken: "r", expiresAt: nil, provider: .openai)])
-        let vm = makeVM(script, accounts: [existing], store: store)
-
-        await vm.importFromCodex()
-
-        #expect(vm.accounts.count == 1)
-        #expect(try store.loadAll()[existing.id]?.accessToken == "codex-access")
-        #expect(vm.addLoginState == .notice("“Codex” is already tracked — its login was refreshed."))
     }
 }
