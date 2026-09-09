@@ -120,6 +120,57 @@ struct ProviderShapeTests {
         #expect(mixedCompact.tiffRepresentation != singleCompact.tiffRepresentation)
     }
 
+    @Test("In a mixed compact bar the severity color lands on the percent, not on the prefix")
+    func mixedCompactColorsThePercentOnly() throws {
+        let a = Account(label: "P", provider: .anthropic)
+        let c = Account(label: "W", provider: .openai)
+        let snap = UsageSnapshot(fiveHourPercent: 40, sevenDayPercent: 60, fiveHourResetsAt: nil, sevenDayResetsAt: nil, fetchedAt: Date())
+        let image = MenuBarImage.multiAccount(accounts: [a, c], snapshots: [a.id: snap, c.id: snap], mode: .fiveHour)
+        let rep = try #require(image.tiffRepresentation.flatMap(NSBitmapImageRep.init(data:)))
+        let scale = CGFloat(rep.pixelsWide) / image.size.width
+
+        // Layout of the first segment: 1 pt margin, 11 pt mark, 3 pt gap, then "P " then "40%".
+        let font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+        func width(_ s: String) -> CGFloat {
+            NSAttributedString(string: s, attributes: [.font: font]).size().width
+        }
+        // 40% is the low level, green in either appearance; the prefix and mark are not.
+        func hasGreen(_ columns: Range<Int>) -> Bool {
+            columns.contains { x in
+                (0..<rep.pixelsHigh).contains { y in
+                    guard let c = rep.colorAt(x: x, y: y)?.usingColorSpace(.sRGB),
+                          c.alphaComponent > 0.5 else { return false }
+                    return c.greenComponent - max(c.redComponent, c.blueComponent) > 0.1
+                }
+            }
+        }
+        let textX: CGFloat = 1 + 11 + 3
+        #expect(!hasGreen(Int(textX * scale)..<Int((textX + width("P")) * scale)))
+        #expect(hasGreen(Int((textX + width("P ")) * scale)..<Int((textX + width("P 40%")) * scale)))
+    }
+
+    @Test("Severity text colors switch with the appearance, unlike the dot's system colors")
+    func textLevelColorsResolvePerAppearance() throws {
+        func resolved(_ percent: Int, _ name: NSAppearance.Name) throws -> NSColor {
+            var color: NSColor?
+            try #require(NSAppearance(named: name)).performAsCurrentDrawingAppearance {
+                color = MenuBarImage.textLevelColor(percent).usingColorSpace(.sRGB)
+            }
+            return try #require(color)
+        }
+        func check(_ percent: Int, light: UInt32, dark: UInt32) throws {
+            for (name, hex) in [(NSAppearance.Name.aqua, light), (NSAppearance.Name.darkAqua, dark)] {
+                let color = try resolved(percent, name)
+                let want = [(hex >> 16) & 0xFF, (hex >> 8) & 0xFF, hex & 0xFF].map { CGFloat($0) / 255 }
+                let got = [color.redComponent, color.greenComponent, color.blueComponent]
+                #expect(zip(got, want).allSatisfy { abs($0 - $1) < 0.005 }, "\(percent) \(name): \(got)")
+            }
+        }
+        try check(30, light: 0x1A_7F_37, dark: 0x3F_B9_50)
+        try check(60, light: 0x9A_67_00, dark: 0xE3_B3_41)
+        try check(90, light: 0xCF_22_2E, dark: 0xF8_51_49)
+    }
+
     @Test("A single-provider compact bar still lays out the 7 pt dot")
     func singleProviderKeepsTheDotLayout() {
         let a = Account(label: "P", provider: .anthropic)

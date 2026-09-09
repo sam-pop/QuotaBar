@@ -13,6 +13,31 @@ enum MenuBarImage {
         }
     }
 
+    /// Level color for a percent drawn as *text*, not as a filled dot: text needs far more
+    /// contrast to stay legible, and `systemYellow` at 11 pt on a light menu bar does not have
+    /// it. These are the popover mockups' severity tokens (`design-mockups/popover-redesign.html`,
+    /// `--lvl-low/mid/crit`), light / dark. The dynamic provider resolves them at draw time, so a
+    /// dark menu bar under a light desktop still gets the dark variant. Thresholds match
+    /// `levelColor`.
+    static func textLevelColor(_ percent: Int) -> NSColor {
+        let light: UInt32, dark: UInt32
+        switch percent {
+        case ..<50: (light, dark) = (0x1A_7F_37, 0x3F_B9_50)
+        case ..<75: (light, dark) = (0x9A_67_00, 0xE3_B3_41)
+        default:    (light, dark) = (0xCF_22_2E, 0xF8_51_49)
+        }
+        return NSColor(name: nil) { appearance in
+            srgb(appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? dark : light)
+        }
+    }
+
+    private static func srgb(_ hex: UInt32) -> NSColor {
+        NSColor(srgbRed: CGFloat((hex >> 16) & 0xFF) / 255,
+                green: CGFloat((hex >> 8) & 0xFF) / 255,
+                blue: CGFloat(hex & 0xFF) / 255,
+                alpha: 1)
+    }
+
     /// The single-account 5h/7d badge (blue in auto mode, else the level color).
     static func badge(window: MenuBarDisplayMode, isAuto: Bool, percent: Int) -> NSImage {
         let badgeText = window == .fiveHour ? "5h" : "7d"
@@ -41,8 +66,9 @@ enum MenuBarImage {
     /// The multi-account compact image: a colored dot + `X 45%` segment per account,
     /// separated by a middot. Text uses the dynamic label color so it adapts to light/dark.
     /// When providers are mixed the 7 pt dot becomes the provider's own 11 pt mark, drawn in
-    /// its brand color (a trademark never carries severity), and the percent text carries the
-    /// severity color the dot used to carry. Single-provider output is unchanged.
+    /// its brand color (a trademark never carries severity), and the *percent alone* carries the
+    /// severity color the dot used to carry — in its text variant (`textLevelColor`), since the
+    /// prefix beside it stays `labelColor`. Single-provider output is unchanged.
     static func multiAccount(
         accounts: [Account],
         snapshots: [UUID: UsageSnapshot],
@@ -53,15 +79,22 @@ enum MenuBarImage {
             overrides: accounts.map(\.shortCode)
         )
         let mixed = MultiAccountMenuBar.providerShapes(for: accounts.map(\.provider))
-        struct Segment { let dotColor: NSColor?; let text: String; let tag: String?; let shape: ProviderShape }
+        // `valueColor` is nil unless the percent carries severity on its own — that is, only
+        // when providers are mixed and there is a reading; "--%" is never severity-colored.
+        struct Segment {
+            let dotColor: NSColor?; let valueColor: NSColor?
+            let prefix: String; let value: String; let tag: String?; let shape: ProviderShape
+        }
         let segments: [Segment] = zip(prefixes, accounts).map { prefix, account in
             let shape = ProviderShape.mark(for: account.provider, mixed: mixed)
             if let snapshot = snapshots[account.id],
                let active = MenuBarSelection.active(mode: mode, snapshot: snapshot) {
                 let tag = MultiAccountMenuBar.windowTag(mode: mode, window: active.window)
-                return Segment(dotColor: levelColor(active.percent), text: "\(prefix) \(active.percent)%", tag: tag, shape: shape)
+                return Segment(dotColor: levelColor(active.percent),
+                               valueColor: mixed ? textLevelColor(active.percent) : nil,
+                               prefix: prefix, value: "\(active.percent)%", tag: tag, shape: shape)
             }
-            return Segment(dotColor: nil, text: "\(prefix) --%", tag: nil, shape: shape)
+            return Segment(dotColor: nil, valueColor: nil, prefix: prefix, value: "--%", tag: nil, shape: shape)
         }
 
         let font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
@@ -70,6 +103,19 @@ enum MenuBarImage {
         let tagAttrs: [NSAttributedString.Key: Any] = [.font: tagFont, .foregroundColor: NSColor.secondaryLabelColor]
         let sepAttrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor.tertiaryLabelColor]
         let tagGap: CGFloat = 2
+
+        // The prefix is always label-colored. When the percent carries severity it is drawn as
+        // its own string beside it; otherwise the segment stays the single string it always was,
+        // so single-provider output is byte-identical.
+        func pieces(_ segment: Segment) -> [NSAttributedString] {
+            guard let valueColor = segment.valueColor else {
+                return [NSAttributedString(string: "\(segment.prefix) \(segment.value)", attributes: textAttrs)]
+            }
+            var valueAttrs = textAttrs
+            valueAttrs[.foregroundColor] = valueColor
+            return [NSAttributedString(string: "\(segment.prefix) ", attributes: textAttrs),
+                    NSAttributedString(string: segment.value, attributes: valueAttrs)]
+        }
 
         // The provider marks need more room than the dot to read at menu-bar size: 11 pt,
         // the most that stays comfortably inside the 18 pt image. The dot keeps its 7 pt so
@@ -85,7 +131,7 @@ enum MenuBarImage {
         for (index, segment) in segments.enumerated() {
             if index > 0 { width += sep.size().width + segGap * 2 }
             if segment.dotColor != nil { width += markSize + dotGap }
-            width += NSAttributedString(string: segment.text, attributes: textAttrs).size().width
+            width += pieces(segment).reduce(0) { $0 + $1.size().width }
             if let tag = segment.tag {
                 width += tagGap + NSAttributedString(string: tag, attributes: tagAttrs).size().width
             }
@@ -107,13 +153,13 @@ enum MenuBarImage {
                                        severity: severity)
                     x += markSize + dotGap
                 }
-                // A provider mark keeps its own color, so the number carries severity.
-                var drawAttrs = textAttrs
-                if mixed, let severity = segment.dotColor { drawAttrs[.foregroundColor] = severity }
-                let str = NSAttributedString(string: segment.text, attributes: drawAttrs)
-                let strSize = str.size()
-                str.draw(at: NSPoint(x: x, y: (height - strSize.height) / 2))
-                x += strSize.width
+                // A provider mark keeps its own color, so the number carries severity — the
+                // prefix in front of it does not.
+                for piece in pieces(segment) {
+                    let pieceSize = piece.size()
+                    piece.draw(at: NSPoint(x: x, y: (height - pieceSize.height) / 2))
+                    x += pieceSize.width
+                }
                 // Auto-mode window tag ("5h"/"7d"), drawn slightly raised and smaller.
                 if let tag = segment.tag {
                     x += tagGap
