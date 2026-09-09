@@ -582,7 +582,19 @@ struct AccountsViewModelBrowserLoginTests {
 
         let work = Account(label: "Work", accountUUID: "acct-A")
         let personal = Account(label: "Personal", accountUUID: "acct-B")
-        let vm = makeVM(script, accounts: [work, personal], store: InMemoryAccountCredentialStore())
+        // Both accounts are healthy — credentials in the store and a usage fetch that
+        // succeeds — so the refresh below settles with `needsReAuth` false. The suite's
+        // default (no credentials, or a `tokenExpired` fetch) would set it, and the
+        // affordance at the end of this test would read `.start` instead of `.none`.
+        script.usageResult = .success(usageResponse())
+        let store = InMemoryAccountCredentialStore([
+            work.id: Self.freshCredentials,
+            personal.id: Self.freshCredentials,
+        ])
+        let vm = makeVM(script, accounts: [work, personal], store: store)
+        // The init's own refresh, awaited, so it cannot land mid-test and race the
+        // affordance assertion at the end.
+        await vm.refreshAll()
 
         await vm.beginLogin(work.id)
         await vm.beginLogin(personal.id)
