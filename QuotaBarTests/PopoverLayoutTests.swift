@@ -2,6 +2,7 @@ import Testing
 import Foundation
 
 @Suite("PopoverLayout")
+@MainActor
 struct PopoverLayoutTests {
 
     /// Matches `UsagePopoverView.matrixOuterWidth`: label column + one column per account
