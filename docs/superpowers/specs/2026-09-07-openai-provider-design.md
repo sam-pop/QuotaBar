@@ -1,6 +1,6 @@
 # OpenAI / Codex Provider — Design (v2, post-audit)
 
-**Date:** 2026-09-07 · **Status:** implemented on sam-pop/add-OpenAI (commits 744d394..31d819a); probe O3 pending — runs 2026-09-08 after 21:10 EDT, result recorded here by the lead
+**Date:** 2026-09-07 · **Status:** implemented on sam-pop/add-OpenAI; probe O3 FAILED 2026-09-08 (see §2) → §6 Import from Codex CLI DESCOPED by the user's decision; product renamed QuotaBar on the same branch
 **Builds on:** `2026-08-21-browser-oauth-login-design.md` (the app owns its credentials; browser OAuth + PKCE per account). Its invariants — exactly one pending login, single-use pending login, zero I/O in view-model `init`, no `try?` on credential writes — all still hold here.
 **Audit trail:** v1 hardened by one independent Opus audit (3 blockers, 9 majors, 11 minors, 12 traced scenarios) + the lead security pass. Every finding is folded in below; §13 lists them with their resolution.
 
@@ -29,7 +29,7 @@ Scripts: `spikes/openai_spike_o1.py`, `spikes/openai_spike_o2.py`, `spikes/opena
 - **O2e access-token lifetime** is 10 days (`exp − iat = 864000`), vs ~8 h for Anthropic. Refresh pressure is low.
 - **`~/.codex/auth.json` shape** (ChatGPT mode): `auth_mode: "chatgpt"`, `tokens.{id_token, access_token, refresh_token, account_id}`, `last_refresh`, `OPENAI_API_KEY: null`.
 
-**Probe O3 (gate for §6 Import, not for the rest):** `spikes/openai_spike_o3.py`, runnable from 2026-09-08 21:10 local — re-uses the pre-rotation refresh token O2 saved (chmod-600, outside the repo) to see whether the post-rotation grace outlasts a day. It probes our own grant as a proxy for Codex's chain, which the import path takes over.
+**Probe O3 — RUN 2026-09-08 21:11, FAILED.** `spikes/openai_spike_o3.py` re-used the pre-rotation refresh token O2 saved, ~24 h after rotation: **HTTP 400 `refresh_token_reused`** ("Your refresh token has already been used to generate a new access token. Please try signing in again."). The current chain still refreshed (200), so a reuse attempt does not revoke the token family. Conclusion: the post-rotation grace observed in O2d is short-lived; two holders of one refresh chain cannot coexist — whichever refreshes first keeps the login and the other's copy dies. This is exactly the situation an import would create between the app and Codex CLI, so **§6 was descoped** (user decision, 2026-09-08): the Import menu item, `CodexAuthFile`, its `Dependencies` seams, `LoginState.importing`, and `OAuthLoginMode.imported` are removed; OpenAI accounts are added only through the app's own browser login.
 
 ## 3. Goal / non-goals
 
@@ -153,7 +153,9 @@ A Claude account and an OpenAI account that share an email are two accounts.
 - `AccountPersistence` (snapshot/history) is unchanged.
 - `Account` construction sites: 3 in the app (`completeAddAccount`, two in `AccountMigration`), ~28 in tests; all keep compiling via the defaulted parameter, and the two that matter (`completeAddAccount`, the rebuild) pass the provider explicitly.
 
-## 6. Import from Codex CLI
+## 6. Import from Codex CLI — DESCOPED 2026-09-08 (probe O3 failed; see §2)
+
+_Kept for the record. Not shipped._
 
 - **Source:** `$CODEX_HOME/auth.json`, default `~/.codex/auth.json`. Accepted only when `auth_mode == "chatgpt"` and `tokens.access_token` and `tokens.refresh_token` are non-empty strings. Read-only; the file is never written, moved, or deleted.
 - **Discovery for the menu:** `CodexAuthFile.probe()` returns `.available`, `.notFound`, or `.unusable(reason:)` (API-key mode, malformed, missing tokens, over the 1 MiB cap). The menu item is disabled with a `.help` reason when not `.available`. The probe runs when the popover appears, not on a timer. No email subtitle (no JWT parsing).
@@ -270,6 +272,8 @@ Live (lead QA in `make run`, real Codex account): add Codex account via browser 
 - **Note:** the token response's `earliest_refresh_at` suggests refreshing too early may be rejected. Proactive refresh happens at ~10 days, far past it; a reactive refresh after a spurious 401 could be rejected with a 400 and count toward the breaker. Accepted; revisit if it shows up.
 
 ## 12. Follow-ups (not this PR)
+
+- Import from Codex CLI could return only with a design that does not share a refresh chain (e.g. OpenAI device-code login, or a Codex-side export that revokes its own copy).
 
 - Product rename (candidate: **QuotaBar**); bundle identifier and Keychain service name stay `com.sam.ClaudeUsageBar` to avoid a credential migration.
 - OpenAI device-code login as a fallback when 1455 is unavailable.
