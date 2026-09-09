@@ -37,6 +37,46 @@ struct ProviderShapeTests {
         }
     }
 
+    @Test("Claude's mark carries its brand color; OpenAI's has none")
+    func brandColors() throws {
+        let claude = try #require(ProviderShape.claudeMark.brandColor?.usingColorSpace(.sRGB))
+        #expect((claude.redComponent * 1000).rounded() / 1000 == 0.851)     // 0xD9
+        #expect((claude.greenComponent * 1000).rounded() / 1000 == 0.467)   // 0x77
+        #expect((claude.blueComponent * 1000).rounded() / 1000 == 0.341)    // 0x57
+        #expect(ProviderShape.openAIMark.brandColor == nil)
+        #expect(ProviderShape.dot.brandColor == nil)
+    }
+
+    /// Simplest of the two options in the brief: render each mark on its own and inspect its
+    /// solid pixels, rather than hunting the mark's region inside a whole menu-bar image.
+    @Test("A drawn Claude mark is orange, a drawn OpenAI mark is gray, and neither is severity-colored")
+    func drawnMarkColors() throws {
+        func solidPixels(_ shape: ProviderShape) throws -> [NSColor] {
+            let image = NSImage(size: NSSize(width: 64, height: 64), flipped: false) { rect in
+                shape.draw(in: rect, severity: .systemGreen)
+                return true
+            }
+            let rep = try #require(image.tiffRepresentation.flatMap(NSBitmapImageRep.init(data:)))
+            return (0..<rep.pixelsWide).flatMap { x in
+                (0..<rep.pixelsHigh).compactMap { y -> NSColor? in
+                    guard let c = rep.colorAt(x: x, y: y)?.usingColorSpace(.sRGB),
+                          c.alphaComponent > 0.9 else { return nil }
+                    return c
+                }
+            }
+        }
+
+        let claude = try solidPixels(.claudeMark)
+        #expect(!claude.isEmpty)
+        #expect(claude.allSatisfy { $0.redComponent > $0.greenComponent && $0.greenComponent > $0.blueComponent })
+
+        let openAI = try solidPixels(.openAIMark)
+        #expect(!openAI.isEmpty)
+        #expect(openAI.allSatisfy {
+            abs($0.redComponent - $0.greenComponent) < 0.02 && abs($0.greenComponent - $0.blueComponent) < 0.02
+        })
+    }
+
     @Test("A mixed-provider bar is wider than the same accounts under one provider")
     func mixedBarDrawsGlyph() {
         let a = Account(label: "P", provider: .anthropic)

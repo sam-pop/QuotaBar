@@ -1,8 +1,9 @@
 import AppKit
 
 /// The mark drawn before each account's segment in the menu bar. A dot — filled with the
-/// severity color — unless providers are mixed; then each provider's own logo, drawn
-/// monochrome from the asset catalog.
+/// severity color — unless providers are mixed; then each provider's own logo from the asset
+/// catalog, drawn in its brand color (Claude) or the label color (OpenAI, whose mark is
+/// black/white), never in the severity color.
 enum ProviderShape: Equatable {
     case dot
     case claudeMark
@@ -21,6 +22,15 @@ enum ProviderShape: Equatable {
         NSBezierPath(ovalIn: rect)
     }
 
+    /// Claude's brand orange, as listed by simple-icons (#D97757).
+    static let claudeBrand = NSColor(srgbRed: 0xD9 / 255.0, green: 0x77 / 255.0, blue: 0x57 / 255.0, alpha: 1)
+
+    /// Brand color for marks that have one; `nil` draws in the label color. Never the
+    /// severity color.
+    var brandColor: NSColor? {
+        self == .claudeMark ? Self.claudeBrand : nil
+    }
+
     /// The template image for a provider mark, from the app's asset catalog; nil for `.dot`.
     /// Loaded via `Bundle(for:)` because under `make test` `Bundle.main` is the xctest runner.
     var image: NSImage? {
@@ -36,8 +46,9 @@ enum ProviderShape: Equatable {
     }
 
     /// Draws the mark into `rect`. The dot is filled with `severity` (today's behavior). The
-    /// provider marks are trademarks and are never recolored: they are drawn as template
-    /// images in `NSColor.labelColor`, and `severity` is ignored for them.
+    /// provider marks are trademarks and never carry severity: they are drawn as template
+    /// images in `brandColor` — Claude's orange, or the label color when the brand mark is
+    /// black/white — and `severity` is ignored for them.
     func draw(in rect: NSRect, severity: NSColor) {
         guard let image else {
             severity.setFill()
@@ -46,7 +57,7 @@ enum ProviderShape: Equatable {
         }
         // The standard AppKit template tint: stamp the mark, then paint its alpha.
         image.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1)
-        NSColor.labelColor.setFill()
+        (brandColor ?? .labelColor).setFill()
         rect.fill(using: .sourceAtop)
     }
 }

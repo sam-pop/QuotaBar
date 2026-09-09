@@ -90,8 +90,9 @@ struct UsagePopoverView: View {
         .frame(maxWidth: .infinity).padding(.vertical, 20).padding(.horizontal, 16)
     }
 
-    /// A provider's own logo for a menu item: monochrome (it is a trademark) and sized like
-    /// the SF Symbol it replaces — the vector asset would otherwise draw at its natural 24 pt.
+    /// A provider's own logo for a menu item, sized like the SF Symbol it replaces — the
+    /// vector asset would otherwise draw at its natural 24 pt. Claude's is tinted at the call
+    /// site; OpenAI's brand mark is black/white, so it inherits the menu's color.
     private func providerMark(_ name: String) -> some View {
         Image(name).renderingMode(.template).resizable().scaledToFit().frame(width: 12, height: 12)
     }
@@ -104,7 +105,10 @@ struct UsagePopoverView: View {
                 Menu {
                     Button {
                         Task { await viewModel.beginAddAccountLogin(provider: .anthropic) }
-                    } label: { Label { Text("Claude") } icon: { providerMark("ProviderMarkClaude") } }
+                    } label: { Label { Text("Claude") } icon: {
+                        providerMark("ProviderMarkClaude")
+                            .foregroundStyle(Color(nsColor: ProviderShape.claudeBrand))
+                    } }
                         .help("Opens claude.ai in your browser to sign in")
                     Button {
                         Task { await viewModel.beginAddAccountLogin(provider: .openai) }

@@ -94,10 +94,14 @@ struct UsageMatrixView: View {
             }
             if mixedProviders {
                 HStack(spacing: 3) {
-                    // Monochrome, same tertiary style as the text: the marks are trademarks.
+                    // Claude's mark in its brand orange; OpenAI's brand mark is black/white,
+                    // so it takes the label's tertiary style. Never the severity color.
                     Image(account.provider == .anthropic ? "ProviderMarkClaude" : "ProviderMarkOpenAI")
                         .renderingMode(.template)
                         .resizable().scaledToFit().frame(height: 8)
+                        .foregroundStyle(account.provider == .anthropic
+                                         ? AnyShapeStyle(Color(nsColor: ProviderShape.claudeBrand))
+                                         : AnyShapeStyle(HierarchicalShapeStyle.tertiary))
                     Text(account.provider.displayName.uppercased()).font(.system(size: 8, weight: .semibold)).tracking(0.4)
                 }
                 .foregroundStyle(.tertiary)

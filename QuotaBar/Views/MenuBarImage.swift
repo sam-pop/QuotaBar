@@ -40,9 +40,9 @@ enum MenuBarImage {
 
     /// The multi-account compact image: a colored dot + `X 45%` segment per account,
     /// separated by a middot. Text uses the dynamic label color so it adapts to light/dark.
-    /// When providers are mixed the dot becomes the provider's own mark, drawn monochrome
-    /// (a trademark is never tinted), and the percent text carries the severity color the
-    /// dot used to carry. Single-provider output is unchanged.
+    /// When providers are mixed the dot becomes the provider's own mark, drawn in its brand
+    /// color (a trademark never carries severity), and the percent text carries the severity
+    /// color the dot used to carry. Single-provider output is unchanged.
     static func multiAccount(
         accounts: [Account],
         snapshots: [UUID: UsageSnapshot],
@@ -106,7 +106,7 @@ enum MenuBarImage {
                                        severity: severity)
                     x += markSize + dotGap
                 }
-                // A monochrome provider mark can't carry severity, so the number does.
+                // A provider mark keeps its own color, so the number carries severity.
                 var drawAttrs = textAttrs
                 if mixed, let severity = segment.dotColor { drawAttrs[.foregroundColor] = severity }
                 let str = NSAttributedString(string: segment.text, attributes: drawAttrs)
@@ -149,8 +149,8 @@ enum MenuBarImage {
         ]
 
         let mixed = MultiAccountMenuBar.providerShapes(for: accounts.map(\.provider))
-        // `shape` is nil unless providers are mixed; the mark is monochrome — the bars
-        // already carry severity.
+        // `shape` is nil unless providers are mixed; the mark keeps its own color — the
+        // bars already carry severity.
         struct Cluster {
             let prefix: String; let p5: Int?; let p7: Int?; let num5: String; let num7: String
             let shape: ProviderShape?
@@ -199,8 +199,8 @@ enum MenuBarImage {
                     x += 0.5 + clusterGap
                 }
                 if let shape = c.shape {
-                    // Always a provider mark here, so `severity` is ignored: the mark is
-                    // drawn monochrome and the bars below carry the level color.
+                    // Always a provider mark here, so `severity` is ignored: the mark keeps
+                    // its brand/label color and the bars below carry the level color.
                     shape.draw(in: NSRect(x: x, y: (height - glyph) / 2, width: glyph, height: glyph),
                                severity: .labelColor)
                     x += glyph + glyphGap
