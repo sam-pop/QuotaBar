@@ -3,8 +3,6 @@ import SwiftUI
 struct UsagePopoverView: View {
     @ObservedObject var viewModel: AccountsViewModel
 
-    /// Widest matrix we draw inline (≈3 accounts); beyond that the columns scroll horizontally.
-    private static let maxMatrixWidth: CGFloat = 680
     /// Horizontal padding wrapping the matrix (matches `matrix`'s `.padding(.horizontal, 12)`).
     private static let matrixHPadding: CGFloat = 24
 
@@ -20,9 +18,15 @@ struct UsagePopoverView: View {
     /// Grid plus its surrounding padding — the width the matrix actually needs.
     private var matrixOuterWidth: CGFloat { matrixGridWidth + Self.matrixHPadding }
 
-    /// Single account keeps the original 320-pt column; 2+ accounts widen to fit the matrix.
+    /// The screen the popover opens on: `NSScreen.main` is the screen with the key window.
+    /// The fallback only matters headless (no screens attached).
+    private var visibleWidth: CGFloat { NSScreen.main?.visibleFrame.width ?? 1440 }
+
+    /// Single account keeps the original 320-pt column; 2+ accounts widen to fit the matrix,
+    /// up to what the screen can show.
     private var popoverWidth: CGFloat {
-        accountCount <= 1 ? 320 : min(matrixOuterWidth, Self.maxMatrixWidth)
+        PopoverLayout.width(accountCount: accountCount, matrixOuterWidth: matrixOuterWidth,
+                            visibleWidth: visibleWidth)
     }
 
     var body: some View {
@@ -60,7 +64,7 @@ struct UsagePopoverView: View {
     private var matrix: some View {
         let content = UsageMatrixView(viewModel: viewModel, columns: viewModel.accountViews)
             .padding(.horizontal, 12).padding(.vertical, 10)
-        if matrixOuterWidth > Self.maxMatrixWidth {
+        if PopoverLayout.scrolls(matrixOuterWidth: matrixOuterWidth, visibleWidth: visibleWidth) {
             ScrollView(.horizontal, showsIndicators: true) { content }
         } else {
             content
