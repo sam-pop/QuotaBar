@@ -4,19 +4,22 @@ generate:
 	xcodegen generate
 
 build: generate
-	xcodebuild -project ClaudeUsageBar.xcodeproj -scheme ClaudeUsageBar -configuration Release build SYMROOT=build
+	xcodebuild -project QuotaBar.xcodeproj -scheme QuotaBar -configuration Release build SYMROOT=build
 
 test: generate
-	xcodebuild -project ClaudeUsageBar.xcodeproj -scheme ClaudeUsageBar -destination 'platform=macOS' test CODE_SIGNING_ALLOWED=NO
+	xcodebuild -project QuotaBar.xcodeproj -scheme QuotaBar -destination 'platform=macOS' test CODE_SIGNING_ALLOWED=NO
 
 run: build
-	open build/Release/ClaudeUsageBar.app
+	open build/Release/QuotaBar.app
 
+# Also stops/removes any pre-rename ClaudeUsageBar.app: both bundles share one bundle
+# identifier and one Keychain item, so two installed copies would fight over them.
 install: build
+	-pkill -x QuotaBar || true
 	-pkill -x ClaudeUsageBar || true
-	rm -rf /Applications/ClaudeUsageBar.app
-	cp -R build/Release/ClaudeUsageBar.app /Applications/
-	@echo "Installed to /Applications/ClaudeUsageBar.app"
+	rm -rf /Applications/QuotaBar.app /Applications/ClaudeUsageBar.app
+	cp -R build/Release/QuotaBar.app /Applications/
+	@echo "Installed to /Applications/QuotaBar.app"
 
 clean:
-	rm -rf build DerivedData ClaudeUsageBar.xcodeproj
+	rm -rf build DerivedData QuotaBar.xcodeproj ClaudeUsageBar.xcodeproj

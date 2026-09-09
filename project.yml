@@ -1,4 +1,4 @@
-name: ClaudeUsageBar
+name: QuotaBar
 options:
   bundleIdPrefix: com.sam
   deploymentTarget:
@@ -10,37 +10,38 @@ settings:
     SWIFT_VERSION: "6.0"
     MACOSX_DEPLOYMENT_TARGET: "13.0"
 targets:
-  ClaudeUsageBar:
+  QuotaBar:
     type: application
     platform: macOS
     sources:
-      - ClaudeUsageBar
+      - QuotaBar
     settings:
       base:
-        INFOPLIST_FILE: ClaudeUsageBar/Info.plist
-        CODE_SIGN_ENTITLEMENTS: ClaudeUsageBar/ClaudeUsageBar.entitlements
+        INFOPLIST_FILE: QuotaBar/Info.plist
+        CODE_SIGN_ENTITLEMENTS: QuotaBar/QuotaBar.entitlements
         CODE_SIGN_IDENTITY: "-"
+        # Historical identifier: renaming it would orphan existing installs' credentials/registration.
         PRODUCT_BUNDLE_IDENTIFIER: com.sam.ClaudeUsageBar
         MARKETING_VERSION: "1.5.0"
         CURRENT_PROJECT_VERSION: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-  ClaudeUsageBarTests:
+  QuotaBarTests:
     type: bundle.unit-test
     platform: macOS
     sources:
-      - path: ClaudeUsageBarTests
-      - path: ClaudeUsageBar
-        excludes: ["ClaudeUsageBarApp.swift"]
+      - path: QuotaBarTests
+      - path: QuotaBar
+        excludes: ["QuotaBarApp.swift"]
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_VERSION: "6.0"
         PRODUCT_BUNDLE_IDENTIFIER: com.sam.ClaudeUsageBarTests
 schemes:
-  ClaudeUsageBar:
+  QuotaBar:
     build:
       targets:
-        ClaudeUsageBar: all
-        ClaudeUsageBarTests: [test]
+        QuotaBar: all
+        QuotaBarTests: [test]
     test:
-      targets: [ClaudeUsageBarTests]
+      targets: [QuotaBarTests]

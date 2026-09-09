@@ -1,7 +1,7 @@
 import Testing
 import Foundation
 // App sources are compiled directly into this test target (unhosted bundle.unit-test),
-// so its types are in-module — no `import ClaudeUsageBar` needed.
+// so its types are in-module — no `import QuotaBar` needed.
 
 @Suite("UsageSnapshot(from:)")
 struct UsageSnapshotTests {

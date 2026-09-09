@@ -10,5 +10,5 @@ enum AppInfo {
     }
 
     /// User-Agent header value derived from the bundle version.
-    static var userAgent: String { "ClaudeUsageBar/\(version)" }
+    static var userAgent: String { "QuotaBar/\(version)" }
 }

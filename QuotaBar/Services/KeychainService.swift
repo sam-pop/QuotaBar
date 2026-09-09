@@ -58,6 +58,7 @@ enum KeychainService {
     /// deleted. Overridable in tests so the migration path never touches the real path.
     static var defaultLegacyCacheURL: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            // Historical identifier: renaming it would orphan existing installs' credentials/registration.
             .appendingPathComponent("ClaudeUsageBar", isDirectory: true)
             .appendingPathComponent(".credentials.json")
     }

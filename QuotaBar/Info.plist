@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>ClaudeUsageBar</string>
+    <string>QuotaBar</string>
     <key>CFBundleDisplayName</key>
     <string>QuotaBar</string>
     <key>CFBundleIdentifier</key>

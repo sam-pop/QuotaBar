@@ -66,7 +66,7 @@ struct KeychainMigrationTests {
 
     private func tempLegacyURL() -> URL {
         let dir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("ClaudeUsageBarTests-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("QuotaBarTests-\(UUID().uuidString)", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appendingPathComponent(".credentials.json")
     }

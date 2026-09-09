@@ -1,15 +1,17 @@
-# ClaudeUsageBar
+# QuotaBar
 
 A lightweight macOS menu bar app that shows your Claude API usage limits at a glance. Zero dependencies — just Apple frameworks.
 
-[![CI](https://github.com/sam-pop/ClaudeUsageBar/actions/workflows/ci.yml/badge.svg)](https://github.com/sam-pop/ClaudeUsageBar/actions/workflows/ci.yml)
+> Formerly ClaudeUsageBar; renamed when OpenAI/Codex support landed. Existing installs keep working — the bundle identifier and Keychain item are unchanged.
+
+[![CI](https://github.com/sam-pop/QuotaBar/actions/workflows/ci.yml/badge.svg)](https://github.com/sam-pop/QuotaBar/actions/workflows/ci.yml)
 ![macOS 13+](https://img.shields.io/badge/macOS-13%2B-blue)
 ![Swift 6](https://img.shields.io/badge/Swift-6-orange)
 ![Zero Dependencies](https://img.shields.io/badge/dependencies-0-green)
 
 ## What It Does
 
-ClaudeUsageBar sits in your menu bar showing a usage window and its reset countdown. Click to see full details — both usage windows, color-coded progress bars, live countdowns, and a 24-hour usage trend sparkline.
+QuotaBar sits in your menu bar showing a usage window and its reset countdown. Click to see full details — both usage windows, color-coded progress bars, live countdowns, and a 24-hour usage trend sparkline.
 
 It signs in on its own — a browser OAuth login (authorization code + PKCE) straight to Anthropic or OpenAI — and calls the usage API directly. Claude Code doesn't need to be installed, or logged in, or running.
 
@@ -34,9 +36,9 @@ It signs in on its own — a browser OAuth login (authorization code + PKCE) str
 Requires **macOS 13+**, **Xcode 16+**, and **XcodeGen** (`brew install xcodegen`). No Claude Code install or login needed — the app authenticates on its own.
 
 ```bash
-git clone https://github.com/sam-pop/ClaudeUsageBar.git
-cd ClaudeUsageBar
-make install    # builds + copies to /Applications
+git clone https://github.com/sam-pop/QuotaBar.git
+cd QuotaBar
+make install    # builds + copies to /Applications (also removes an older ClaudeUsageBar.app)
 ```
 
 Or just `make run` to build and launch without installing.
@@ -128,7 +130,7 @@ auth.openai.com                     │
                               [Popover: one section per account + sparklines]
 ```
 
-**Credential storage.** All accounts' credentials live in a **single** app-owned Keychain item (`com.sam.ClaudeUsageBar`) whose payload is a JSON map keyed by account ID. One Keychain item means one access-control entry (not one per account) and no orphaned items. Writes are done as a verified read-modify-write of a single slot, and a present-but-unreadable item (e.g. after a code-signature change) is never overwritten — so a locked or ACL-broken Keychain can't wipe your other accounts. On upgrade from an older single-account build, the existing credentials are migrated into this map (and the legacy item/plaintext cache deleted) only **after** the new copy is verified to have persisted.
+**Credential storage.** All accounts' credentials live in a **single** app-owned Keychain item (`com.sam.ClaudeUsageBar` — the bundle identifier keeps its historical name) whose payload is a JSON map keyed by account ID. One Keychain item means one access-control entry (not one per account) and no orphaned items. Writes are done as a verified read-modify-write of a single slot, and a present-but-unreadable item (e.g. after a code-signature change) is never overwritten — so a locked or ACL-broken Keychain can't wipe your other accounts. On upgrade from an older single-account build, the existing credentials are migrated into this map (and the legacy item/plaintext cache deleted) only **after** the new copy is verified to have persisted.
 
 **Token refresh.** Each account's access token is refreshed **proactively** before it expires using that account's own stored refresh token — no Keychain prompt for a routine refresh. A **reactive** refresh on a 401/403 is the safety net. A per-account circuit breaker only trips on genuine token rejections (400/401/403); network blips, 429s, and 5xx don't count, so a flaky connection never strands an account. Anthropic's refresh tokens carry a rolling ~28-day expiry, so a login that sits unused for about that long stops refreshing; OpenAI reports no such expiry, so OpenAI accounts show no countdown. Either way the popover surfaces a dead login with a **Log in again** control, and re-authing is identity-guarded once the app has learned the account's identity — it checks the browser login's account against the one being re-authed before overwriting anything.
 
@@ -165,12 +167,12 @@ Restart the app for the change to take effect. Invalid entries are ignored, valu
 ## Project Structure
 
 ```
-ClaudeUsageBar/
+QuotaBar/
 ├── project.yml                    # XcodeGen project spec
 ├── Makefile                       # Build automation
 ├── .github/workflows/ci.yml       # Build + test on macOS runners
-├── ClaudeUsageBar/
-│   ├── ClaudeUsageBarApp.swift    # @main entry point
+├── QuotaBar/
+│   ├── QuotaBarApp.swift          # @main entry point
 │   ├── AppInfo.swift              # Shared version / User-Agent helper
 │   ├── Models/
 │   │   ├── UsageData.swift          # API response + snapshot + history
@@ -223,7 +225,7 @@ ClaudeUsageBar/
 │       ├── LoginPill.swift          # Login/re-auth controls (start, paste, retry, cancel)
 │       ├── UsageMatrixView.swift    # Side-by-side comparison table for 2+ accounts
 │       └── UsagePopoverView.swift   # Full popover layout
-└── ClaudeUsageBarTests/             # Swift Testing unit tests
+└── QuotaBarTests/                   # Swift Testing unit tests
 ```
 
 ## Testing
@@ -248,7 +250,7 @@ CI runs the same build + test on every push and pull request (see the badge abov
 | "Finish the login in progress first." | Only one login runs at a time across the whole app. Cancel the one shown in the popover (or remove the account holding it) before starting another. |
 | Keychain prompt / an account needs re-adding after rebuilding from source | With ad-hoc signing (`CODE_SIGN_IDENTITY = "-"`), the app-owned Keychain item is bound to the previous build's code signature, so a rebuilt binary may not be able to read it. Re-add the affected account via **Add account…** / **Log in again**. |
 | Repeated prompts while iterating locally | Sign with a stable, free **"Apple Development"** identity instead of ad-hoc signing so the item's ACL stays valid across rebuilds. |
-| No notifications | Check System Settings → Notifications → ClaudeUsageBar; the popover also shows a "Notifications off" shortcut when disabled |
+| No notifications | Check System Settings → Notifications → QuotaBar; the popover also shows a "Notifications off" shortcut when disabled |
 
 ## License
 

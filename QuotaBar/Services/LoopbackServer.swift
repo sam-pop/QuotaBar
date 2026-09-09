@@ -185,6 +185,7 @@ private final class LoopbackEngine: @unchecked Sendable {
     /// the port may still be briefly taken, which beats freezing the next login outright.
     private static let cancelTimeout: TimeInterval = 1
 
+    // Historical identifier: renaming it would orphan existing installs' credentials/registration.
     private let queue = DispatchQueue(label: "com.sam.ClaudeUsageBar.loopback")
     /// The only path a callback is accepted on; every other target is answered 404.
     private let callbackPath: String
@@ -562,7 +563,7 @@ private enum HTTPReply {
     static let success = response(status: "200 OK", body: page(
         title: "Logged in",
         heading: "Logged in",
-        message: "You can close this tab and go back to ClaudeUsageBar."))
+        message: "You can close this tab and go back to QuotaBar."))
 
     static let expired = response(status: "200 OK", body: page(
         title: "Login expired",

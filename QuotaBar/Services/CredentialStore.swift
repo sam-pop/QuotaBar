@@ -16,6 +16,7 @@ protocol CredentialStoring: Sendable {
 /// Not unit-tested: its SecItem* calls hit the login keychain, which would prompt and
 /// pollute the developer's keychain during `make test`. `CredentialStoring` is the seam.
 struct KeychainCredentialStore: CredentialStoring {
+    // Historical identifier: renaming it would orphan existing installs' credentials/registration.
     private let service = "com.sam.ClaudeUsageBar"
     private let account = "oauth-credentials"
 

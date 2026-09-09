@@ -85,6 +85,7 @@ enum KeychainLoadOutcome: Equatable {
 /// pollute the developer's keychain during `make test`. `AccountCredentialStoring` is the
 /// seam; the load-classification and RMW logic are tested via the pure helpers above.
 struct KeychainAccountCredentialStore: AccountCredentialStoring {
+    // Historical identifier: renaming it would orphan existing installs' credentials/registration.
     private let service = "com.sam.ClaudeUsageBar"
     private let account = "accounts-credentials-v1"
 
