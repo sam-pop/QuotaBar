@@ -203,3 +203,16 @@ struct UsageAPIErrorTests {
         #expect(!UsageAPIError.invalidResponse(500).needsReLogin)
     }
 }
+
+@Suite("Legacy cache path")
+struct LegacyCachePathTests {
+    /// The pre-1.2 plaintext cache lives under the app's ORIGINAL support directory name.
+    /// The product was renamed to QuotaBar, but this path is a migration source for old
+    /// installs and must never follow the rename.
+    @Test("defaultLegacyCacheURL still points at ClaudeUsageBar/.credentials.json")
+    func legacyPathKeepsHistoricalName() {
+        let url = KeychainService.defaultLegacyCacheURL
+        #expect(url.lastPathComponent == ".credentials.json")
+        #expect(url.deletingLastPathComponent().lastPathComponent == "ClaudeUsageBar")
+    }
+}

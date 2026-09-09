@@ -109,7 +109,7 @@ claude.ai / console.anthropic.com   │
 auth.openai.com                     │
                                     ▼
               AccountCredentialManager ──▶ one app-owned Keychain item
-                                    ▲       "com.sam.ClaudeUsageBar"
+                                    ▲       "com.sam.ClaudeUsageBar" (historical id, kept)
               per-account, atomic   │       payload = { accountID: credentials }
               read-modify-write     │       (no-prompt reads, encrypted at rest)
                                     ▼
