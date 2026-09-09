@@ -29,18 +29,23 @@ struct AccountReorderTests {
             addNotification: { _ in })
     }
 
-    private func makeVM(_ accounts: [Account]) -> (AccountsViewModel, AccountsStore) {
+    private func makeVM(_ accounts: [Account]) -> (AccountsViewModel, UserDefaults) {
         let defaults = ephemeralDefaults()
-        let store = AccountsStore(defaults: defaults)
-        store.save(accounts)
+        AccountsStore(defaults: defaults).save(accounts)
         let viewModel = AccountsViewModel(
-            accountsStore: store,
+            accountsStore: AccountsStore(defaults: defaults),
             credentialStore: InMemoryAccountCredentialStore(),
             defaults: defaults,
             startTimer: false,
             deps: deps
         )
-        return (viewModel, store)
+        return (viewModel, defaults)
+    }
+
+    /// Reads the saved list the way a relaunch would: a brand-new store over the same
+    /// defaults, never the view model's own copy.
+    private func persisted(_ defaults: UserDefaults) -> [String] {
+        AccountsStore(defaults: defaults).load().map(\.label)
     }
 
     private func trio() -> [Account] {
@@ -50,39 +55,50 @@ struct AccountReorderTests {
     @Test("Moving the middle account swaps it with its neighbor, in the list, the views, and on disk")
     func movesTheMiddleAccount() {
         let accounts = trio()
-        let (vm, store) = makeVM(accounts)
+        let (vm, defaults) = makeVM(accounts)
 
         vm.moveAccount(accounts[1].id, by: -1)
         #expect(vm.accounts.map(\.label) == ["Bravo", "Alpha", "Charlie"])
         #expect(vm.accountViews.map(\.account.label) == ["Bravo", "Alpha", "Charlie"])
-        #expect(store.load().map(\.label) == ["Bravo", "Alpha", "Charlie"])
+        #expect(persisted(defaults) == ["Bravo", "Alpha", "Charlie"])
 
         vm.moveAccount(accounts[1].id, by: 1)
         #expect(vm.accounts.map(\.label) == ["Alpha", "Bravo", "Charlie"])
         #expect(vm.accountViews.map(\.account.label) == ["Alpha", "Bravo", "Charlie"])
-        #expect(store.load().map(\.label) == ["Alpha", "Bravo", "Charlie"])
+        #expect(persisted(defaults) == ["Alpha", "Bravo", "Charlie"])
     }
 
     @Test("The ends don't wrap: the first can't move left and the last can't move right")
     func theEndsHold() {
         let accounts = trio()
-        let (vm, store) = makeVM(accounts)
+        let (vm, defaults) = makeVM(accounts)
 
         vm.moveAccount(accounts[0].id, by: -1)
         vm.moveAccount(accounts[2].id, by: 1)
 
         #expect(vm.accounts.map(\.label) == ["Alpha", "Bravo", "Charlie"])
-        #expect(store.load().map(\.label) == ["Alpha", "Bravo", "Charlie"])
+        #expect(persisted(defaults) == ["Alpha", "Bravo", "Charlie"])
     }
 
     @Test("An id that isn't tracked moves nothing")
     func unknownIDMovesNothing() {
-        let (vm, store) = makeVM(trio())
+        let (vm, defaults) = makeVM(trio())
 
         vm.moveAccount(UUID(), by: -1)
 
         #expect(vm.accounts.map(\.label) == ["Alpha", "Bravo", "Charlie"])
-        #expect(store.load().map(\.label) == ["Alpha", "Bravo", "Charlie"])
+        #expect(persisted(defaults) == ["Alpha", "Bravo", "Charlie"])
+    }
+
+    @Test("A move is one slot: a bigger offset is refused rather than jumping the list")
+    func onlyOneSlotAtATime() {
+        let accounts = trio()
+        let (vm, defaults) = makeVM(accounts)
+
+        vm.moveAccount(accounts[0].id, by: 2)
+
+        #expect(vm.accounts.map(\.label) == ["Alpha", "Bravo", "Charlie"])
+        #expect(persisted(defaults) == ["Alpha", "Bravo", "Charlie"])
     }
 
     @Test("The menu bar's segments follow the new order")

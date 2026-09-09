@@ -53,9 +53,13 @@ struct UsageMatrixView: View {
     private func headerRow(now: Date) -> some View {
         row {
             cornerCell
-            ForEach(columns.indices, id: \.self) { index in
+            // Keyed by account id, not position: reordering moves a cell's view identity with
+            // its account, so the edit popover attached to it follows the account instead of
+            // dismissing and re-presenting on whatever account slid into that slot. The index
+            // is still what the position-based bits (identity color, divider) read.
+            ForEach(Array(columns.enumerated()), id: \.element.id) { index, column in
                 columnDivider(index)
-                headerCell(columns[index], index: index, now: now)
+                headerCell(column, index: index, now: now)
             }
         }
         .overlay(alignment: .bottom) { Divider() }
@@ -180,10 +184,10 @@ struct UsageMatrixView: View {
         let flags = UsageComparison.leaders(data.map { $0?.percent })
         return row {
             labelCell(title, subtitle)
-            ForEach(columns.indices, id: \.self) { index in
+            ForEach(Array(columns.enumerated()), id: \.element.id) { index, column in
                 columnDivider(index)
                 metricCell(data[index], leader: flags[index], now: now,
-                           models: perModel ? (columns[index].snapshot?.modelLimits ?? []) : [])
+                           models: perModel ? (column.snapshot?.modelLimits ?? []) : [])
             }
         }
         .overlay(alignment: .bottom) { Divider().opacity(0.5) }
@@ -256,8 +260,7 @@ struct UsageMatrixView: View {
     private var trendRow: some View {
         row {
             labelCell("Trend", "recent")
-            ForEach(columns.indices, id: \.self) { index in
-                let column = columns[index]
+            ForEach(Array(columns.enumerated()), id: \.element.id) { index, column in
                 columnDivider(index)
                 Group {
                     if column.history.count >= 2 {

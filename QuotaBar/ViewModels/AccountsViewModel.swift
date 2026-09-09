@@ -838,6 +838,7 @@ final class AccountsViewModel: ObservableObject {
     /// so nothing but the order moves; the per-column identity colors are by position and
     /// follow the account to its new slot.
     func moveAccount(_ id: UUID, by offset: Int) {
+        guard abs(offset) == 1 else { return }   // one slot either way, as the name says
         guard let index = accounts.firstIndex(where: { $0.id == id }) else { return }
         let target = index + offset
         guard accounts.indices.contains(target) else { return }
