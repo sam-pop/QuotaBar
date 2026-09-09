@@ -1,0 +1,418 @@
+<title>Codex in the Matrix</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --clay: #E8896B;
+    --clay-dim: rgba(232,137,107,.16);
+    --lvl-low: #1a7f37; --lvl-mid: #9a6700; --lvl-high: #bc4c00; --lvl-crit: #cf222e;
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    --mono: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, monospace;
+    --acct-1: #3B82F6; --acct-2: #A855F7; --acct-3: #14B8A6;
+    --canvas: #e4e3df; --canvas-2: #d8d7d2;
+    --pop: rgba(248,247,245,.96); --pop-border: rgba(0,0,0,.10);
+    --card: rgba(0,0,0,.028); --card-border: rgba(0,0,0,.08); --card-hi: rgba(0,0,0,.05);
+    --track: rgba(0,0,0,.10);
+    --t1: rgba(20,20,22,.94); --t2: rgba(20,20,22,.58); --t3: rgba(20,20,22,.36);
+    --shadow: 0 16px 44px rgba(0,0,0,.20), 0 2px 6px rgba(0,0,0,.10);
+    --menubar: rgba(250,250,250,.85);
+    --amber-bg: rgba(188,76,0,.10); --amber-line: rgba(188,76,0,.35);
+    --red-bg: rgba(207,34,46,.10); --red-line: rgba(207,34,46,.35);
+    --btn: rgba(0,0,0,.08); --btn-hi: rgba(0,0,0,.13);
+    --menu: rgba(252,252,251,.98);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --canvas:#131417; --canvas-2:#0d0e10; --pop:rgba(34,35,39,.96); --pop-border:rgba(255,255,255,.09);
+      --card:rgba(255,255,255,.035); --card-border:rgba(255,255,255,.07); --card-hi:rgba(255,255,255,.06);
+      --track:rgba(255,255,255,.10); --t1:rgba(255,255,255,.93); --t2:rgba(255,255,255,.56); --t3:rgba(255,255,255,.34);
+      --shadow:0 18px 50px rgba(0,0,0,.55),0 2px 8px rgba(0,0,0,.4); --menubar:rgba(28,28,30,.85);
+      --lvl-low:#3FB950; --lvl-mid:#E3B341; --lvl-high:#F0883E; --lvl-crit:#F85149;
+      --amber-bg:rgba(240,136,62,.14); --amber-line:rgba(240,136,62,.4);
+      --red-bg:rgba(248,81,73,.14); --red-line:rgba(248,81,73,.4);
+      --btn:rgba(255,255,255,.10); --btn-hi:rgba(255,255,255,.16);
+      --menu:rgba(44,45,50,.98);
+      --acct-1:#4A9EFF; --acct-2:#B084F5; --acct-3:#2DD4BF;
+    }
+  }
+  :root[data-theme="dark"] {
+    --canvas:#131417; --canvas-2:#0d0e10; --pop:rgba(34,35,39,.96); --pop-border:rgba(255,255,255,.09);
+    --card:rgba(255,255,255,.035); --card-border:rgba(255,255,255,.07); --card-hi:rgba(255,255,255,.06);
+    --track:rgba(255,255,255,.10); --t1:rgba(255,255,255,.93); --t2:rgba(255,255,255,.56); --t3:rgba(255,255,255,.34);
+    --shadow:0 18px 50px rgba(0,0,0,.55),0 2px 8px rgba(0,0,0,.4); --menubar:rgba(28,28,30,.85);
+    --lvl-low:#3FB950; --lvl-mid:#E3B341; --lvl-high:#F0883E; --lvl-crit:#F85149;
+    --amber-bg:rgba(240,136,62,.14); --amber-line:rgba(240,136,62,.4);
+    --red-bg:rgba(248,81,73,.14); --red-line:rgba(248,81,73,.4);
+    --btn:rgba(255,255,255,.10); --btn-hi:rgba(255,255,255,.16);
+    --menu:rgba(44,45,50,.98);
+    --acct-1:#4A9EFF; --acct-2:#B084F5; --acct-3:#2DD4BF;
+  }
+
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body {
+    font-family:var(--font); color:var(--t1);
+    background: radial-gradient(1200px 700px at 80% -10%, rgba(232,137,107,.10), transparent 60%), linear-gradient(180deg, var(--canvas), var(--canvas-2));
+    min-height:100vh; padding:40px clamp(16px,4vw,56px) 80px; -webkit-font-smoothing:antialiased; line-height:1.45;
+  }
+  .wrap { max-width:1180px; margin:0 auto; }
+  .pagehead { display:flex; align-items:flex-start; justify-content:space-between; gap:24px; flex-wrap:wrap; margin-bottom:8px; }
+  .pagehead h1 { font-size:26px; font-weight:680; letter-spacing:-.02em; text-wrap:balance; }
+  .pagehead p { color:var(--t2); font-size:14px; max-width:60ch; margin-top:8px; }
+  .toggle { display:inline-flex; gap:2px; padding:3px; border-radius:10px; background:var(--card); border:1px solid var(--card-border); flex:0 0 auto; }
+  .toggle button { font:inherit; font-size:12px; font-weight:560; color:var(--t2); background:none; border:0; padding:7px 13px; border-radius:7px; cursor:pointer; }
+  .toggle button[aria-pressed="true"] { background:var(--clay); color:#231a16; }
+
+  section.block { margin-top:44px; }
+  .opt-head { display:flex; align-items:baseline; gap:10px; margin-bottom:6px; }
+  .opt-tag { font-size:11px; font-weight:700; letter-spacing:.09em; text-transform:uppercase; color:var(--clay); background:var(--clay-dim); padding:4px 9px; border-radius:6px; }
+  .opt-head h2 { font-size:17px; font-weight:640; letter-spacing:-.01em; }
+  .opt-sub { color:var(--t2); font-size:13px; margin:2px 0 18px; max-width:64ch; }
+  .grid2 { display:grid; grid-template-columns:1fr; gap:28px; }
+  @media (min-width: 980px) { .grid2 { grid-template-columns:1fr 1fr; align-items:start; } }
+  .grid3 { display:grid; grid-template-columns:1fr; gap:22px; }
+  @media (min-width: 980px) { .grid3 { grid-template-columns:1fr 1fr 1fr; align-items:start; } }
+  .variant { }
+  .variant h3 { font-size:13px; font-weight:640; margin-bottom:8px; display:flex; align-items:center; gap:8px; }
+  .variant h3 .k { font-family:var(--mono); font-size:10.5px; color:var(--clay); background:var(--clay-dim); padding:2px 6px; border-radius:5px; }
+  .variant p { font-size:12.5px; color:var(--t2); margin-top:8px; max-width:48ch; }
+  .rec { font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--lvl-low); border:1px solid currentColor; border-radius:5px; padding:1px 6px; }
+
+  /* menu bar */
+  .menubar { display:flex; justify-content:flex-end; align-items:center; gap:18px; height:26px; padding:0 14px; border-radius:8px;
+    background:var(--menubar); border:1px solid var(--pop-border); font-size:12.5px; color:var(--t1); }
+  .menubar .mi { color:var(--t2); font-variant-numeric:tabular-nums; }
+  .statusitem { display:inline-flex; align-items:center; gap:6px; font-variant-numeric:tabular-nums; }
+  .statusitem b { font-weight:600; }
+  .statusitem .tag { font-size:9.5px; color:var(--t3); margin-left:-2px; align-self:flex-start; margin-top:1px; }
+  .sep { color:var(--t3); padding:0 2px; }
+  .caret { color:var(--t3); }
+  .dot { width:8px; height:8px; border-radius:50%; flex:0 0 auto; display:inline-block; }
+  .pv { width:9px; height:9px; flex:0 0 auto; display:inline-block; }
+
+  /* popover */
+  .popover { background:var(--pop); border:1px solid var(--pop-border); border-radius:16px; box-shadow:var(--shadow); overflow:hidden; }
+  .pop-top { display:flex; align-items:center; gap:9px; padding:13px 15px 12px; border-bottom:1px solid var(--card-border); }
+  .spark { color:var(--clay); font-size:15px; }
+  .pop-top h3 { font-size:13.5px; font-weight:640; letter-spacing:-.01em; flex:1; }
+  .icon-btn { background:none; border:0; color:var(--t3); cursor:pointer; font-size:12px; padding:2px 3px; border-radius:5px; }
+
+  .mgrid { display:grid; grid-template-columns:78px 1fr 1fr 1fr; }
+  .mgrid > div { padding:11px 13px; border-bottom:1px solid var(--card-border); }
+  .colsep { border-left:1px solid var(--card-border); }
+  .chead { padding:12px 13px 11px; }
+  .chead .row1 { display:flex; align-items:center; gap:7px; }
+  .chead .row1 .sp { flex:1; }
+  .acct-name { font-size:13px; font-weight:620; letter-spacing:-.01em; }
+  .acct-mail { display:block; font-size:11px; color:var(--t3); margin:2px 0 6px 15px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .provider { display:inline-flex; align-items:center; gap:5px; font-size:10px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--t3);
+    border:1px solid var(--card-border); border-radius:5px; padding:2px 6px; margin-left:15px; }
+  .provider.claude { color:var(--clay); border-color:color-mix(in srgb, var(--clay) 40%, transparent); }
+  .fresh { font-size:10.5px; color:var(--t3); display:inline-flex; align-items:center; gap:4px; font-variant-numeric:tabular-nums; margin-left:15px; margin-top:6px; }
+  .fresh .ok { color:var(--lvl-low); }
+  .pill { font-size:10px; font-weight:600; padding:2px 7px; border-radius:20px; display:inline-flex; gap:4px; align-items:center; margin-left:15px; margin-top:6px; }
+  .pill.amber { color:var(--lvl-high); background:var(--amber-bg); border:1px solid var(--amber-line); }
+  .pill.red { color:var(--lvl-crit); background:var(--red-bg); border:1px solid var(--red-line); }
+
+  .rlabel { display:flex; flex-direction:column; justify-content:center; gap:2px; }
+  .rlabel .r-t { font-size:12px; font-weight:600; }
+  .rlabel .r-s { font-size:10px; color:var(--t3); }
+  .cell { display:flex; flex-direction:column; gap:6px; position:relative; }
+  .cell .top { display:flex; align-items:baseline; justify-content:space-between; }
+  .cval { font-size:19px; font-weight:700; letter-spacing:-.02em; }
+  .cell.leader::before { content:""; position:absolute; left:-13px; top:8px; bottom:8px; width:2.5px; border-radius:2px; background:var(--clay); }
+  .flag { font-size:9px; font-weight:700; letter-spacing:.05em; color:var(--clay); text-transform:uppercase; }
+  .na { color:var(--t3); font-size:12px; font-style:italic; }
+  .low{color:var(--lvl-low)} .mid{color:var(--lvl-mid)} .high{color:var(--lvl-high)} .crit{color:var(--lvl-crit)}
+  .bar { height:5px; border-radius:3px; background:var(--track); overflow:hidden; }
+  .bar > i { display:block; height:100%; border-radius:3px; }
+  .bg-low{background:var(--lvl-low)} .bg-mid{background:var(--lvl-mid)} .bg-high{background:var(--lvl-high)} .bg-crit{background:var(--lvl-crit)}
+  .num { font-variant-numeric:tabular-nums; }
+  .reset { font-family:var(--mono); font-size:10.5px; color:var(--t2); font-variant-numeric:tabular-nums; }
+  .reset .lbl { color:var(--t3); }
+  .trendrow { padding:10px 13px 12px !important; }
+  .trendrow svg { width:100%; height:26px; display:block; }
+
+  .pop-add { margin:12px 14px 4px; }
+  .add-btn { display:flex; align-items:center; justify-content:center; gap:7px; padding:9px; border-radius:9px; background:var(--btn); font-size:13px; font-weight:560; cursor:pointer; position:relative; }
+  .add-btn:hover { background:var(--btn-hi); }
+  .add-hint { text-align:center; font-size:11.5px; color:var(--t3); margin:7px 0 10px; }
+  .pop-bottom { display:flex; align-items:center; justify-content:space-between; padding:11px 14px 12px; border-top:1px solid var(--card-border); font-size:12px; color:var(--t2); }
+  .seg { display:inline-flex; gap:1px; padding:2px; border-radius:8px; background:var(--track); border:1px solid var(--card-border); }
+  .seg span { font-size:11px; font-weight:560; color:var(--t2); padding:4px 9px; border-radius:6px; line-height:1; }
+  .seg span[aria-current] { background:var(--pop); color:var(--t1); box-shadow:0 1px 2px rgba(0,0,0,.25); }
+
+  /* the dropdown menu (option 1) */
+  .menu { position:absolute; left:50%; transform:translateX(-50%); top:calc(100% + 6px); min-width:260px; z-index:2;
+    background:var(--menu); border:1px solid var(--pop-border); border-radius:10px; box-shadow:var(--shadow); padding:5px; text-align:left; }
+  .menu .mi-row { display:flex; align-items:center; gap:9px; padding:7px 10px; border-radius:6px; font-size:12.5px; font-weight:500; }
+  .menu .mi-row:hover { background:var(--btn); }
+  .menu .mi-row .sub { font-size:10.5px; color:var(--t3); margin-left:auto; font-weight:400; }
+  .menu .mi-row.disabled { color:var(--t3); }
+  .menu hr { border:0; border-top:1px solid var(--card-border); margin:4px 6px; }
+  .add-wrap { position:relative; padding-bottom:132px; }  /* leaves room for the open menu in the mockup */
+
+  /* two buttons (option 2) */
+  .two { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+
+  /* chooser (option 3) */
+  .chooser { border:1px solid var(--card-border); border-radius:10px; padding:10px 12px; background:var(--card); }
+  .chooser .q { font-size:12px; font-weight:600; margin-bottom:8px; }
+  .chooser .opts { display:flex; gap:8px; }
+  .chooser .opt { flex:1; display:flex; flex-direction:column; align-items:center; gap:5px; padding:9px 6px; border-radius:8px; background:var(--btn); font-size:12px; font-weight:560; cursor:pointer; }
+  .chooser .opt small { font-size:10px; color:var(--t3); font-weight:400; }
+  .chooser .link { font-size:11px; color:var(--t3); margin-top:8px; text-align:center; }
+
+  /* login-state panel */
+  .state-row { display:grid; grid-template-columns:120px 1fr; gap:10px 14px; align-items:center; padding:10px 0; border-top:1px solid var(--card-border); font-size:12.5px; }
+  .state-row:first-child { border-top:0; }
+  .state-row .who { font-weight:600; display:flex; align-items:center; gap:7px; }
+  .state-row .who small { font-size:10px; color:var(--t3); font-weight:500; }
+
+  .notes { margin-top:18px; padding:16px 18px; border-radius:12px; background:var(--card); border:1px solid var(--card-border); }
+  .notes h4 { font-size:12px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--t2); margin-bottom:11px; }
+  .notes ul { list-style:none; display:flex; flex-direction:column; gap:9px; }
+  .notes li { font-size:13px; color:var(--t2); display:flex; gap:9px; line-height:1.5; }
+  .notes li b { color:var(--t1); font-weight:600; }
+  .notes .tick { color:var(--clay); flex:0 0 auto; font-weight:700; }
+  .verdict { margin-top:44px; padding:20px 22px; border-radius:14px; background:linear-gradient(180deg, var(--clay-dim), transparent); border:1px solid var(--amber-line); }
+  .verdict h3 { font-size:14px; font-weight:680; margin-bottom:8px; }
+  .verdict p { font-size:13.5px; color:var(--t2); max-width:78ch; line-height:1.55; }
+  .verdict b { color:var(--t1); }
+  :focus-visible { outline:2px solid var(--clay); outline-offset:2px; border-radius:4px; }
+</style>
+
+<!-- provider glyph sprites -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="g-claude" viewBox="0 0 16 16"><path d="M8 1 L9.6 6.4 L15 8 L9.6 9.6 L8 15 L6.4 9.6 L1 8 L6.4 6.4 Z" fill="currentColor"/></symbol>
+  <symbol id="g-openai" viewBox="0 0 16 16"><path d="M8 1.6 L13.5 4.8 V11.2 L8 14.4 L2.5 11.2 V4.8 Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="8" cy="8" r="1.9" fill="currentColor"/></symbol>
+</svg>
+
+<div class="wrap">
+  <div class="pagehead">
+    <div>
+      <h1>Codex joins the usage matrix</h1>
+      <p>Three decisions rendered with the numbers from today's spike: your Codex account was at 70% of its 5-hour window and 52% of its weekly one. Toggle the theme to check both.</p>
+    </div>
+    <div class="toggle" role="group" aria-label="Theme">
+      <button data-theme-btn="light" aria-pressed="false">Light</button>
+      <button data-theme-btn="dark" aria-pressed="true">Dark</button>
+    </div>
+  </div>
+
+  <!-- ============ 1. MENU BAR ============ -->
+  <section class="block">
+    <div class="opt-head"><span class="opt-tag">1 · Menu bar</span><h2>How a third, OpenAI account reads at a glance</h2></div>
+    <p class="opt-sub">Today each account is a colored dot plus a prefix. The question is whether the provider needs its own mark in 26 points of height.</p>
+    <div class="grid2">
+      <div class="variant">
+        <h3><span class="k">1a</span> Prefix only <span class="rec">recommended</span></h3>
+        <div class="menubar"><span class="mi">Mon 9:41</span>
+          <span class="statusitem">
+            <span class="dot" style="background:var(--acct-1)"></span><b class="num low">P 45%</b><span class="tag">5h</span>
+            <span class="sep">·</span>
+            <span class="dot" style="background:var(--acct-2)"></span><b class="num high">W 82%</b><span class="tag">7d</span>
+            <span class="sep">·</span>
+            <span class="dot" style="background:var(--acct-3)"></span><b class="num mid">C 70%</b><span class="tag">5h</span>
+            <span class="caret">▾</span>
+          </span>
+        </div>
+        <p>The auto-derived prefix comes from the label ("Codex" → C), which the user can override anyway. Nothing new to learn; the bar stays the same width per account.</p>
+      </div>
+      <div class="variant">
+        <h3><span class="k">1b</span> Provider glyph replaces the dot</h3>
+        <div class="menubar"><span class="mi">Mon 9:41</span>
+          <span class="statusitem">
+            <svg class="pv" style="color:var(--acct-1)"><use href="#g-claude"/></svg><b class="num low">P 45%</b><span class="tag">5h</span>
+            <span class="sep">·</span>
+            <svg class="pv" style="color:var(--acct-2)"><use href="#g-claude"/></svg><b class="num high">W 82%</b><span class="tag">7d</span>
+            <span class="sep">·</span>
+            <svg class="pv" style="color:var(--acct-3)"><use href="#g-openai"/></svg><b class="num mid">C 70%</b><span class="tag">5h</span>
+            <span class="caret">▾</span>
+          </span>
+        </div>
+        <p>The identity color stays, the shape carries the provider: a star for Claude, a hexagon for OpenAI. Readable, but it changes the single-account bar too, and 9-point glyphs blur on non-Retina displays.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 2. POPOVER ============ -->
+  <section class="block">
+    <div class="opt-head"><span class="opt-tag">2 · Popover</span><h2>OpenAI as a peer column</h2></div>
+    <p class="opt-sub">The 5-hour and weekly rows line up exactly, so the only new element is a provider chip under the column header. The model row shows a dash for OpenAI: the endpoint reports model availability but no per-model percentage.</p>
+
+    <div class="popover" style="max-width:720px">
+      <div class="pop-top"><span class="spark">✦</span><h3>Claude Usage</h3></div>
+      <div class="mgrid">
+        <div></div>
+        <div class="chead">
+          <div class="row1"><span class="dot" style="background:var(--acct-1)"></span><span class="acct-name">Personal</span><span class="sp"></span><button class="icon-btn">✎</button><button class="icon-btn">🗑</button></div>
+          <span class="acct-mail">poplovitch.samuel@gmail.com</span>
+          <span class="provider claude"><svg class="pv"><use href="#g-claude"/></svg>Claude</span>
+          <div class="fresh"><span class="ok">●</span> Updated 12s ago</div>
+        </div>
+        <div class="chead colsep">
+          <div class="row1"><span class="dot" style="background:var(--acct-2)"></span><span class="acct-name">Work</span><span class="sp"></span><button class="icon-btn">✎</button><button class="icon-btn">🗑</button></div>
+          <span class="acct-mail">sam@legal-innovators.com</span>
+          <span class="provider claude"><svg class="pv"><use href="#g-claude"/></svg>Claude</span>
+          <div><span class="pill red">✕ Log in again</span></div>
+        </div>
+        <div class="chead colsep">
+          <div class="row1"><span class="dot" style="background:var(--acct-3)"></span><span class="acct-name">Codex</span><span class="sp"></span><button class="icon-btn">✎</button><button class="icon-btn">🗑</button></div>
+          <span class="acct-mail">sam@legal-innovators.com</span>
+          <span class="provider"><svg class="pv"><use href="#g-openai"/></svg>OpenAI · Team</span>
+          <div class="fresh"><span class="ok">●</span> Updated 12s ago</div>
+        </div>
+
+        <div class="rlabel"><span class="r-t">5-Hour</span><span class="r-s">session</span></div>
+        <div><div class="cell">
+          <div class="top"><span class="cval low num">45%</span></div>
+          <div class="bar"><i class="bg-low" style="width:45%"></i></div>
+          <div class="reset"><span class="lbl">resets</span> 2h 41m</div>
+        </div></div>
+        <div class="colsep"><div class="cell">
+          <div class="top"><span class="cval low num">27%</span></div>
+          <div class="bar"><i class="bg-low" style="width:27%"></i></div>
+          <div class="reset"><span class="lbl">resets</span> 1h 8m</div>
+        </div></div>
+        <div class="colsep"><div class="cell leader">
+          <div class="top"><span class="cval mid num">70%</span><span class="flag">peak</span></div>
+          <div class="bar"><i class="bg-mid" style="width:70%"></i></div>
+          <div class="reset"><span class="lbl">resets</span> 4h 18m</div>
+        </div></div>
+
+        <div class="rlabel"><span class="r-t">7-Day</span><span class="r-s">weekly</span></div>
+        <div><div class="cell">
+          <div class="top"><span class="cval low num">31%</span></div>
+          <div class="bar"><i class="bg-low" style="width:31%"></i></div>
+          <div class="reset"><span class="lbl">resets</span> 3d 6h</div>
+        </div></div>
+        <div class="colsep"><div class="cell leader">
+          <div class="top"><span class="cval high num">82%</span><span class="flag">peak</span></div>
+          <div class="bar"><i class="bg-high" style="width:82%"></i></div>
+          <div class="reset"><span class="lbl">resets</span> 5d 2h</div>
+        </div></div>
+        <div class="colsep"><div class="cell">
+          <div class="top"><span class="cval mid num">52%</span></div>
+          <div class="bar"><i class="bg-mid" style="width:52%"></i></div>
+          <div class="reset"><span class="lbl">resets</span> 5d 18h</div>
+        </div></div>
+
+        <div class="rlabel"><span class="r-t">Fable</span><span class="r-s">model · wk</span></div>
+        <div><div class="cell">
+          <div class="top"><span class="cval mid num">58%</span></div>
+          <div class="bar"><i class="bg-mid" style="width:58%"></i></div>
+          <div class="reset"><span class="lbl">resets</span> 3d 6h</div>
+        </div></div>
+        <div class="colsep"><div class="cell leader">
+          <div class="top"><span class="cval crit num">91%</span><span class="flag">peak</span></div>
+          <div class="bar"><i class="bg-crit" style="width:91%"></i></div>
+          <div class="reset"><span class="lbl">resets</span> 4d 19h</div>
+        </div></div>
+        <div class="colsep"><div class="cell"><span class="na">— not reported</span></div></div>
+
+        <div class="rlabel"><span class="r-t">Trend</span><span class="r-s">recent</span></div>
+        <div class="trendrow"><svg viewBox="0 0 200 26" preserveAspectRatio="none" aria-hidden="true"><polyline points="0,20 28,19 56,18 84,19 112,14 140,13 168,14 200,13" fill="none" stroke="var(--acct-1)" stroke-width="1.5"/><circle cx="200" cy="13" r="2.2" fill="var(--acct-1)"/></svg></div>
+        <div class="trendrow colsep"><svg viewBox="0 0 200 26" preserveAspectRatio="none" aria-hidden="true"><polyline points="0,11 28,9 56,10 84,6 112,5 140,4 168,4 200,3" fill="none" stroke="var(--acct-2)" stroke-width="1.5"/><circle cx="200" cy="3" r="2.2" fill="var(--acct-2)"/></svg></div>
+        <div class="trendrow colsep"><svg viewBox="0 0 200 26" preserveAspectRatio="none" aria-hidden="true"><polyline points="0,18 28,17 56,15 84,14 112,12 140,9 168,8 200,7" fill="none" stroke="var(--acct-3)" stroke-width="1.5"/><circle cx="200" cy="7" r="2.2" fill="var(--acct-3)"/></svg></div>
+      </div>
+      <div class="pop-add">
+        <div class="add-btn">⊕ Add account…</div>
+        <div class="add-hint">Sign in with the browser — one account at a time.</div>
+      </div>
+      <div class="pop-bottom"><span>Bar: <span class="seg"><span aria-current="true">Auto</span><span>5h</span><span>7d</span><span>Bars</span></span></span><span>Quit</span></div>
+    </div>
+
+    <div class="notes">
+      <h4>What changes, what doesn't</h4>
+      <ul>
+        <li><span class="tick">✓</span><span><b>PEAK still means "closest to its cap".</b> Codex leads the 5-hour row at 70%, which is exactly the contention you'd want flagged.</span></li>
+        <li><span class="tick">✓</span><span><b>Provider chip, not a provider color.</b> Column color stays the account's identity hue; the chip under the email names the provider and, for OpenAI, the plan the token reports.</span></li>
+        <li><span class="tick">✓</span><span><b>Same email, two providers.</b> Dedupe is per provider identity (Anthropic account UUID vs ChatGPT account id), so Work and Codex coexist even though they share an address.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ============ 3. ADD ACCOUNT ============ -->
+  <section class="block">
+    <div class="opt-head"><span class="opt-tag">3 · Add account</span><h2>Where the provider gets chosen</h2></div>
+    <p class="opt-sub">Only the footer of the popover differs. "Import from Codex" is enabled only when a ChatGPT-mode login exists in <code>~/.codex/auth.json</code>.</p>
+    <div class="grid3">
+      <div class="variant">
+        <h3><span class="k">3·1</span> Menu on the button <span class="rec">recommended</span></h3>
+        <div class="popover"><div class="pop-add add-wrap">
+          <div class="add-btn">⊕ Add account… ▾
+            <div class="menu">
+              <div class="mi-row"><svg class="pv" style="color:var(--clay)"><use href="#g-claude"/></svg>Claude <span class="sub">browser login</span></div>
+              <div class="mi-row"><svg class="pv"><use href="#g-openai"/></svg>OpenAI / Codex <span class="sub">browser login</span></div>
+              <hr>
+              <div class="mi-row"><span style="width:9px">⤓</span>Import from Codex CLI <span class="sub">sam@legal-innovators.com</span></div>
+            </div>
+          </div>
+        </div></div>
+        <p>One button, provider chosen at the moment of adding. The import row shows which login it would copy, so you know before clicking.</p>
+      </div>
+      <div class="variant">
+        <h3><span class="k">3·2</span> Two buttons</h3>
+        <div class="popover"><div class="pop-add">
+          <div class="two">
+            <div class="add-btn"><svg class="pv" style="color:var(--clay)"><use href="#g-claude"/></svg> Add Claude…</div>
+            <div class="add-btn"><svg class="pv"><use href="#g-openai"/></svg> Add OpenAI…</div>
+          </div>
+          <div class="add-hint">Have Codex CLI? <u>Import its login</u> instead.</div>
+        </div></div>
+        <p>Fastest path for either provider, but the footer gets busier and the import becomes a text link that's easy to miss.</p>
+      </div>
+      <div class="variant">
+        <h3><span class="k">3·3</span> Inline chooser step</h3>
+        <div class="popover"><div class="pop-add">
+          <div class="chooser">
+            <div class="q">Which account?</div>
+            <div class="opts">
+              <div class="opt"><svg class="pv" style="color:var(--clay)"><use href="#g-claude"/></svg>Claude<small>claude.ai</small></div>
+              <div class="opt"><svg class="pv"><use href="#g-openai"/></svg>OpenAI<small>ChatGPT login</small></div>
+            </div>
+            <div class="link">or import from Codex CLI · Cancel</div>
+          </div>
+        </div></div>
+        <p>Most discoverable, but adds a state to the login UI and one extra click for people who only ever add Claude accounts.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 4. LOGIN STATE ============ -->
+  <section class="block">
+    <div class="opt-head"><span class="opt-tag">4 · Login expiry</span><h2>What an OpenAI column says about its login</h2></div>
+    <p class="opt-sub">Anthropic tells us when the refresh token dies (about 28 days), so Claude columns can count down. OpenAI's token response has no such field, only a 10-day access token that auto-renews. The honest states are below.</p>
+    <div class="grid2">
+      <div class="popover" style="padding:6px 14px">
+        <div class="state-row"><div class="who"><span class="dot" style="background:var(--acct-1)"></span>Personal <small>Claude</small></div><div><span class="fresh" style="margin:0"><span class="ok">●</span> Updated 12s ago · login expires in 12d</span></div></div>
+        <div class="state-row"><div class="who"><span class="dot" style="background:var(--acct-1)"></span>Personal <small>Claude</small></div><div><span class="pill amber" style="margin:0">⚠ Login expires in 2d</span></div></div>
+        <div class="state-row"><div class="who"><span class="dot" style="background:var(--acct-3)"></span>Codex <small>OpenAI</small></div><div><span class="fresh" style="margin:0"><span class="ok">●</span> Updated 12s ago</span></div></div>
+        <div class="state-row"><div class="who"><span class="dot" style="background:var(--acct-3)"></span>Codex <small>OpenAI</small></div><div><span class="pill red" style="margin:0">✕ Log in again</span> <span class="fresh" style="margin-left:8px">refresh was rejected</span></div></div>
+      </div>
+      <div class="notes" style="margin-top:0">
+        <h4>Proposal</h4>
+        <ul>
+          <li><span class="tick">✓</span><span><b>No countdown for OpenAI.</b> Showing one would be a guess. The "Updated …" line stays, and nothing pre-expiry is shown.</span></li>
+          <li><span class="tick">✓</span><span><b>Same failure affordance.</b> A rejected refresh flips the column to the existing red "Log in again" pill, which re-opens the OpenAI browser login with the account's email pre-filled where OpenAI allows it.</span></li>
+          <li><span class="tick">✓</span><span><b>Pre-expiry notifications</b> stay Claude-only until OpenAI exposes a refresh-token lifetime.</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <div class="verdict">
+    <h3>My recommendation</h3>
+    <p><b>1a</b> prefix-only in the menu bar, <b>2</b> a peer column with a provider chip, <b>3·1</b> a menu on the existing button, and <b>4</b> no fake countdown for OpenAI. Together that touches the column header, the footer button, and the login model, and leaves the matrix, sparkline, notification, and menu-bar composition code alone. Pick or mix, and I'll turn the choices into the spec.</p>
+  </div>
+</div>
+
+<script>
+  const root = document.documentElement;
+  root.setAttribute("data-theme", "dark");
+  document.querySelectorAll("[data-theme-btn]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      root.setAttribute("data-theme", btn.getAttribute("data-theme-btn"));
+      document.querySelectorAll("[data-theme-btn]").forEach(b => b.setAttribute("aria-pressed", String(b === btn)));
+    });
+  });
+</script>

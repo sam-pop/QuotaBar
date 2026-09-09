@@ -21,8 +21,8 @@ jobs:
       - name: Build & test
         run: |
           xcodebuild \
-            -project ClaudeUsageBar.xcodeproj \
-            -scheme ClaudeUsageBar \
+            -project QuotaBar.xcodeproj \
+            -scheme QuotaBar \
             -destination 'platform=macOS' \
             build test \
             CODE_SIGN_IDENTITY=- \
