@@ -74,8 +74,8 @@ struct UsagePopoverView: View {
             // The symbol takes the title's own font so it scales with it and sits on the
             // same cap height.
             Image(systemName: "gauge.with.dots.needle.33percent")
-                .font(.title3).foregroundStyle(Color.accentColor)
-            Text("QuotaBar").font(.system(.title3, weight: .semibold))
+                .font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.accentColor)
+            Text("QuotaBar").font(.system(size: 14, weight: .semibold))
             Spacer()
         }
         .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 10)
