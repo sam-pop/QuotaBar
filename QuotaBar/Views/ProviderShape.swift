@@ -1,51 +1,52 @@
 import AppKit
 
-/// The 7-pt mark drawn before each account's segment in the menu bar. A dot unless
-/// providers are mixed; then a four-point star for Claude and a hexagon for OpenAI, filled
-/// with the same severity color the dot uses.
+/// The mark drawn before each account's segment in the menu bar. A dot — filled with the
+/// severity color — unless providers are mixed; then each provider's own logo, drawn
+/// monochrome from the asset catalog.
 enum ProviderShape: Equatable {
     case dot
-    case star
-    case hexagon
+    case claudeMark
+    case openAIMark
 
     static func mark(for provider: Provider, mixed: Bool) -> ProviderShape {
         guard mixed else { return .dot }
         switch provider {
-        case .anthropic: return .star
-        case .openai: return .hexagon
+        case .anthropic: return .claudeMark
+        case .openai: return .openAIMark
         }
     }
 
+    /// The dot's path. Provider marks are images, not geometry — see `draw(in:severity:)`.
     func path(in rect: NSRect) -> NSBezierPath {
+        NSBezierPath(ovalIn: rect)
+    }
+
+    /// The template image for a provider mark, from the app's asset catalog; nil for `.dot`.
+    /// Loaded via `Bundle(for:)` because under `make test` `Bundle.main` is the xctest runner.
+    var image: NSImage? {
+        let name: String
         switch self {
-        case .dot:
-            return NSBezierPath(ovalIn: rect)
-        case .star:
-            // Four points on the rect's edges, waist at 30% — reads as a sparkle at 7 pt.
-            let c = NSPoint(x: rect.midX, y: rect.midY)
-            let r = rect.width / 2, w = r * 0.3
-            let path = NSBezierPath()
-            path.move(to: NSPoint(x: c.x, y: c.y + r))
-            path.line(to: NSPoint(x: c.x + w, y: c.y + w))
-            path.line(to: NSPoint(x: c.x + r, y: c.y))
-            path.line(to: NSPoint(x: c.x + w, y: c.y - w))
-            path.line(to: NSPoint(x: c.x, y: c.y - r))
-            path.line(to: NSPoint(x: c.x - w, y: c.y - w))
-            path.line(to: NSPoint(x: c.x - r, y: c.y))
-            path.line(to: NSPoint(x: c.x - w, y: c.y + w))
-            path.close()
-            return path
-        case .hexagon:
-            let c = NSPoint(x: rect.midX, y: rect.midY)
-            let r = rect.width / 2
-            let path = NSBezierPath()
-            for i in 0..<6 {
-                let angle = CGFloat(i) * .pi / 3 + .pi / 6   // pointy top, flat left and right sides
-                let p = NSPoint(x: c.x + r * cos(angle), y: c.y + r * sin(angle))
-                if i == 0 { path.move(to: p) } else { path.line(to: p) }
-            }
-            path.close()
-            return path
+        case .dot: return nil
+        case .claudeMark: name = "ProviderMarkClaude"
+        case .openAIMark: name = "ProviderMarkOpenAI"
         }
+        guard let image = Bundle(for: AccountRuntime.self).image(forResource: name) else { return nil }
+        image.isTemplate = true
+        return image
+    }
+
+    /// Draws the mark into `rect`. The dot is filled with `severity` (today's behavior). The
+    /// provider marks are trademarks and are never recolored: they are drawn as template
+    /// images in `NSColor.labelColor`, and `severity` is ignored for them.
+    func draw(in rect: NSRect, severity: NSColor) {
+        guard let image else {
+            severity.setFill()
+            path(in: rect).fill()
+            return
+        }
+        // The standard AppKit template tint: stamp the mark, then paint its alpha.
+        image.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1)
+        NSColor.labelColor.setFill()
+        rect.fill(using: .sourceAtop)
     }
 }

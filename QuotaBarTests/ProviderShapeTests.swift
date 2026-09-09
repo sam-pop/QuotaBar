@@ -11,25 +11,33 @@ struct ProviderShapeTests {
         #expect(MultiAccountMenuBar.providerShapes(for: [.anthropic, .openai]) == true)
     }
 
-    @Test("Single-provider installs draw the dot; mixed installs draw star / hexagon by provider")
+    @Test("Single-provider installs draw the dot; mixed installs draw each provider's mark")
     func markSelection() {
         #expect(ProviderShape.mark(for: .anthropic, mixed: false) == .dot)
         #expect(ProviderShape.mark(for: .openai, mixed: false) == .dot)
-        #expect(ProviderShape.mark(for: .anthropic, mixed: true) == .star)
-        #expect(ProviderShape.mark(for: .openai, mixed: true) == .hexagon)
+        #expect(ProviderShape.mark(for: .anthropic, mixed: true) == .claudeMark)
+        #expect(ProviderShape.mark(for: .openai, mixed: true) == .openAIMark)
     }
 
-    @Test("Every shape's path stays inside its rect and is non-empty")
-    func pathsFitTheirRect() {
+    @Test("The dot's path stays inside its rect and is non-empty")
+    func dotPathFitsItsRect() {
         let rect = NSRect(x: 10, y: 4, width: 7, height: 7)
-        for shape in [ProviderShape.dot, .star, .hexagon] {
-            let path = shape.path(in: rect)
-            #expect(!path.isEmpty)
-            #expect(rect.insetBy(dx: -0.01, dy: -0.01).contains(path.bounds), "\(shape)")
+        let path = ProviderShape.dot.path(in: rect)
+        #expect(!path.isEmpty)
+        #expect(rect.insetBy(dx: -0.01, dy: -0.01).contains(path.bounds))
+    }
+
+    @Test("Both provider marks load from the asset catalog as template images")
+    func marksLoadAsTemplateImages() throws {
+        #expect(ProviderShape.dot.image == nil)
+        for shape in [ProviderShape.claudeMark, .openAIMark] {
+            let image = try #require(shape.image, "\(shape)")
+            #expect(image.isTemplate, "\(shape)")
+            #expect(image.size.width > 0 && image.size.height > 0, "\(shape)")
         }
     }
 
-    @Test("A mixed-provider bar is wider in Bars mode and the same width but a different image in compact mode")
+    @Test("A mixed-provider bar is wider than the same accounts under one provider")
     func mixedBarDrawsGlyph() {
         let a = Account(label: "P", provider: .anthropic)
         // `b` and `c` share a label so the two images differ only by provider: the fonts are
@@ -43,9 +51,25 @@ struct ProviderShapeTests {
 
         let singleCompact = MenuBarImage.multiAccount(accounts: [a, b], snapshots: [a.id: snap, b.id: snap], mode: .fiveHour)
         let mixedCompact = MenuBarImage.multiAccount(accounts: [a, c], snapshots: [a.id: snap, c.id: snap], mode: .fiveHour)
-        // Compact mode replaces the dot with a same-size glyph, so the width is unchanged;
-        // the rule is what changes, and it is pinned by `rule()` above.
-        #expect(mixedCompact.size.width == singleCompact.size.width)
+        // The 9 pt provider mark is wider than the 7 pt dot it replaces.
+        #expect(mixedCompact.size.width > singleCompact.size.width)
         #expect(mixedCompact.tiffRepresentation != singleCompact.tiffRepresentation)
+    }
+
+    @Test("A single-provider compact bar still lays out the 7 pt dot")
+    func singleProviderKeepsTheDotLayout() {
+        let a = Account(label: "P", provider: .anthropic)
+        let b = Account(label: "W", provider: .anthropic)
+        let snap = UsageSnapshot(fiveHourPercent: 40, sevenDayPercent: 60, fiveHourResetsAt: nil, sevenDayResetsAt: nil, fetchedAt: Date())
+        let image = MenuBarImage.multiAccount(accounts: [a, b], snapshots: [a.id: snap, b.id: snap], mode: .fiveHour)
+
+        // The pre-change formula, spelled out: 7 pt dot + 3 pt gap per segment, and a middot
+        // with 5 pt on each side between them, all rounded up plus a 1 pt margin per side.
+        let font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+        func width(_ s: String) -> CGFloat {
+            NSAttributedString(string: s, attributes: [.font: font]).size().width
+        }
+        let expected = ceil((7 + 3 + width("P 40%")) + (5 + width("·") + 5) + (7 + 3 + width("W 40%"))) + 2
+        #expect(image.size.width == expected)
     }
 }

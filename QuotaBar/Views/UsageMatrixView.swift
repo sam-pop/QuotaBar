@@ -94,7 +94,10 @@ struct UsageMatrixView: View {
             }
             if mixedProviders {
                 HStack(spacing: 3) {
-                    Image(systemName: account.provider == .anthropic ? "sparkle" : "hexagon").font(.system(size: 7))
+                    // Monochrome, same tertiary style as the text: the marks are trademarks.
+                    Image(account.provider == .anthropic ? "ProviderMarkClaude" : "ProviderMarkOpenAI")
+                        .renderingMode(.template)
+                        .resizable().scaledToFit().frame(height: 8)
                     Text(account.provider.displayName.uppercased()).font(.system(size: 8, weight: .semibold)).tracking(0.4)
                 }
                 .foregroundStyle(.tertiary)

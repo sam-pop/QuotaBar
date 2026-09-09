@@ -38,9 +38,11 @@ enum MenuBarImage {
         return image
     }
 
-    /// The multi-account compact image: a colored dot — or, when providers are mixed, the
-    /// provider's shape — + `X 45%` segment per account, separated by a middot. Text uses
-    /// the dynamic label color so it adapts to light/dark.
+    /// The multi-account compact image: a colored dot + `X 45%` segment per account,
+    /// separated by a middot. Text uses the dynamic label color so it adapts to light/dark.
+    /// When providers are mixed the dot becomes the provider's own mark, drawn monochrome
+    /// (a trademark is never tinted), and the percent text carries the severity color the
+    /// dot used to carry. Single-provider output is unchanged.
     static func multiAccount(
         accounts: [Account],
         snapshots: [UUID: UsageSnapshot],
@@ -69,7 +71,9 @@ enum MenuBarImage {
         let sepAttrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor.tertiaryLabelColor]
         let tagGap: CGFloat = 2
 
-        let dotDiameter: CGFloat = 7
+        // The provider marks need a little more room than the dot to read at menu-bar size;
+        // the dot keeps its 7 pt so single-provider output stays pixel-identical.
+        let markSize: CGFloat = mixed ? 9 : 7
         let dotGap: CGFloat = 3
         let segGap: CGFloat = 5
         let height: CGFloat = 18
@@ -79,7 +83,7 @@ enum MenuBarImage {
         let sep = NSAttributedString(string: "·", attributes: sepAttrs)
         for (index, segment) in segments.enumerated() {
             if index > 0 { width += sep.size().width + segGap * 2 }
-            if segment.dotColor != nil { width += dotDiameter + dotGap }
+            if segment.dotColor != nil { width += markSize + dotGap }
             width += NSAttributedString(string: segment.text, attributes: textAttrs).size().width
             if let tag = segment.tag {
                 width += tagGap + NSAttributedString(string: tag, attributes: tagAttrs).size().width
@@ -96,13 +100,16 @@ enum MenuBarImage {
                     sep.draw(at: NSPoint(x: x, y: (height - sepSize.height) / 2))
                     x += sepSize.width + segGap
                 }
-                if let dot = segment.dotColor {
-                    dot.setFill()
-                    segment.shape.path(in: NSRect(x: x, y: (height - dotDiameter) / 2,
-                                                  width: dotDiameter, height: dotDiameter)).fill()
-                    x += dotDiameter + dotGap
+                if let severity = segment.dotColor {
+                    segment.shape.draw(in: NSRect(x: x, y: (height - markSize) / 2,
+                                                  width: markSize, height: markSize),
+                                       severity: severity)
+                    x += markSize + dotGap
                 }
-                let str = NSAttributedString(string: segment.text, attributes: textAttrs)
+                // A monochrome provider mark can't carry severity, so the number does.
+                var drawAttrs = textAttrs
+                if mixed, let severity = segment.dotColor { drawAttrs[.foregroundColor] = severity }
+                let str = NSAttributedString(string: segment.text, attributes: drawAttrs)
                 let strSize = str.size()
                 str.draw(at: NSPoint(x: x, y: (height - strSize.height) / 2))
                 x += strSize.width
@@ -117,7 +124,7 @@ enum MenuBarImage {
             }
             return true
         }
-        // Not a template: the colored dots must keep their color.
+        // Not a template: the colored dots (and, when mixed, the numbers) keep their color.
         image.isTemplate = false
         return image
     }
@@ -142,27 +149,25 @@ enum MenuBarImage {
         ]
 
         let mixed = MultiAccountMenuBar.providerShapes(for: accounts.map(\.provider))
-        // `shape` is nil unless providers are mixed; `level` is the cluster's worse window,
-        // which colors the glyph the way the compact bar's dot is colored.
+        // `shape` is nil unless providers are mixed; the mark is monochrome — the bars
+        // already carry severity.
         struct Cluster {
             let prefix: String; let p5: Int?; let p7: Int?; let num5: String; let num7: String
-            let shape: ProviderShape?; let level: Int?
+            let shape: ProviderShape?
         }
         let clusters: [Cluster] = zip(prefixes, accounts).map { prefix, account in
             let shape = mixed ? ProviderShape.mark(for: account.provider, mixed: true) : nil
             guard let s = snapshots[account.id] else {
-                return Cluster(prefix: prefix, p5: nil, p7: nil, num5: "--", num7: "--",
-                               shape: shape, level: nil)
+                return Cluster(prefix: prefix, p5: nil, p7: nil, num5: "--", num7: "--", shape: shape)
             }
             let p5 = UsageSnapshot.effectivePercent(s.fiveHourPercent, resetsAt: s.fiveHourResetsAt, now: now)
             let p7 = UsageSnapshot.effectivePercent(s.sevenDayPercent, resetsAt: s.sevenDayResetsAt, now: now)
-            return Cluster(prefix: prefix, p5: p5, p7: p7, num5: "\(p5)%", num7: "\(p7)%",
-                           shape: shape, level: max(p5, p7))
+            return Cluster(prefix: prefix, p5: p5, p7: p7, num5: "\(p5)%", num7: "\(p7)%", shape: shape)
         }
 
         let barW: CGFloat = 26, barH: CGFloat = 4.5
         let gap: CGFloat = 3, prefixGap: CGFloat = 4, clusterGap: CGFloat = 7
-        let glyph: CGFloat = 7, glyphGap: CGFloat = 3
+        let glyph: CGFloat = 9, glyphGap: CGFloat = 3
         let height: CGFloat = 20
         let rowCenterTop = height - 6, rowCenterBot: CGFloat = 6
 
@@ -194,8 +199,10 @@ enum MenuBarImage {
                     x += 0.5 + clusterGap
                 }
                 if let shape = c.shape {
-                    (c.level.map(levelColor) ?? NSColor.tertiaryLabelColor).setFill()
-                    shape.path(in: NSRect(x: x, y: (height - glyph) / 2, width: glyph, height: glyph)).fill()
+                    // Always a provider mark here, so `severity` is ignored: the mark is
+                    // drawn monochrome and the bars below carry the level color.
+                    shape.draw(in: NSRect(x: x, y: (height - glyph) / 2, width: glyph, height: glyph),
+                               severity: .labelColor)
                     x += glyph + glyphGap
                 }
                 let pfx = NSAttributedString(string: c.prefix, attributes: prefixAttrs)

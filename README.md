@@ -87,7 +87,7 @@ The browser's current ChatGPT session decides which account signs in. To add a *
 
 OpenAI shows a 5-hour and a weekly window, which land on the same rows as Claude's. OpenAI does not report a login expiry, so OpenAI accounts show no "login expires in" countdown; a login that stops refreshing gets the same red **Log in again** pill.
 
-When your accounts span both providers, the menu bar marks each one with its provider's shape (✦ Claude, ⬡ OpenAI) instead of a dot, and each column in the popover gets a provider chip. With one provider, nothing changes.
+When your accounts span both providers, the menu bar marks each one with its provider's logo (monochrome, never recolored) instead of a dot, and each column in the popover gets a provider chip. With one provider, nothing changes.
 
 ## Screenshots
 
@@ -220,7 +220,7 @@ QuotaBar/
 │       ├── UsageSectionView.swift   # Card with bar + live countdown
 │       ├── UsageColor.swift         # Level → SwiftUI color
 │       ├── AccountColor.swift       # Per-account accent color
-│       ├── ProviderShape.swift      # Menu-bar provider mark (dot / star / hexagon)
+│       ├── ProviderShape.swift      # Menu-bar provider mark (dot / provider logo)
 │       ├── AccountRowView.swift     # One account's popover block (+ edit/remove)
 │       ├── LoginPill.swift          # Login/re-auth controls (start, paste, retry, cancel)
 │       ├── UsageMatrixView.swift    # Side-by-side comparison table for 2+ accounts
@@ -255,3 +255,5 @@ CI runs the same build + test on every push and pull request (see the badge abov
 ## License
 
 MIT
+
+Provider marks are from [simple-icons](https://simple-icons.org) (CC0). Claude and OpenAI logos are trademarks of Anthropic and OpenAI respectively and are used only to identify each account's provider.

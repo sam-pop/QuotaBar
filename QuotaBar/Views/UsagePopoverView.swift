@@ -94,6 +94,12 @@ struct UsagePopoverView: View {
         .frame(maxWidth: .infinity).padding(.vertical, 20).padding(.horizontal, 16)
     }
 
+    /// A provider's own logo for a menu item: monochrome (it is a trademark) and sized like
+    /// the SF Symbol it replaces — the vector asset would otherwise draw at its natural 24 pt.
+    private func providerMark(_ name: String) -> some View {
+        Image(name).renderingMode(.template).resizable().scaledToFit().frame(width: 12, height: 12)
+    }
+
     private var addAccountControls: some View {
         VStack(spacing: 4) {
             // Once an add-account login is running, its own controls replace the button that
@@ -102,11 +108,11 @@ struct UsagePopoverView: View {
                 Menu {
                     Button {
                         Task { await viewModel.beginAddAccountLogin(provider: .anthropic) }
-                    } label: { Label("Claude", systemImage: "sparkle") }
+                    } label: { Label { Text("Claude") } icon: { providerMark("ProviderMarkClaude") } }
                         .help("Opens claude.ai in your browser to sign in")
                     Button {
                         Task { await viewModel.beginAddAccountLogin(provider: .openai) }
-                    } label: { Label("OpenAI / Codex", systemImage: "hexagon") }
+                    } label: { Label { Text("OpenAI / Codex") } icon: { providerMark("ProviderMarkOpenAI") } }
                         .help("Opens auth.openai.com in your browser to sign in with your ChatGPT account")
                     Divider()
                     Button {
