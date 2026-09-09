@@ -76,7 +76,7 @@ struct UsagePopoverView: View {
     private var header: some View {
         HStack {
             Image(systemName: "sparkle").foregroundStyle(.orange)
-            Text("Claude Usage").font(.system(.headline, weight: .semibold))
+            Text("QuotaBar").font(.system(.headline, weight: .semibold))
             Spacer()
         }
         .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 10)
