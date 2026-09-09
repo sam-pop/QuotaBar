@@ -71,7 +71,7 @@ struct UsagePopoverView: View {
 
     private var header: some View {
         HStack {
-            Image(systemName: "sparkle").foregroundStyle(.orange)
+            Image(systemName: "gauge.with.dots.needle.33percent").foregroundStyle(Color.accentColor)
             Text("QuotaBar").font(.system(.headline, weight: .semibold))
             Spacer()
         }
@@ -90,11 +90,12 @@ struct UsagePopoverView: View {
         .frame(maxWidth: .infinity).padding(.vertical, 20).padding(.horizontal, 16)
     }
 
-    /// A provider's own logo for a menu item, sized like the SF Symbol it replaces — the
-    /// vector asset would otherwise draw at its natural 24 pt. Claude's is tinted at the call
-    /// site; OpenAI's brand mark is black/white, so it inherits the menu's color.
-    private func providerMark(_ name: String) -> some View {
-        Image(name).renderingMode(.template).resizable().scaledToFit().frame(width: 12, height: 12)
+    /// A provider's own logo for a menu item. Sizing and tint both live in the `NSImage`
+    /// (see `ProviderShape.menuImage`) because SwiftUI's `NSMenuItem` bridge drops `.frame`
+    /// and `.foregroundStyle` on a non-SF image.
+    @ViewBuilder
+    private func providerMark(_ shape: ProviderShape) -> some View {
+        if let image = shape.menuImage(pointSize: 14) { Image(nsImage: image) }
     }
 
     private var addAccountControls: some View {
@@ -105,14 +106,11 @@ struct UsagePopoverView: View {
                 Menu {
                     Button {
                         Task { await viewModel.beginAddAccountLogin(provider: .anthropic) }
-                    } label: { Label { Text("Claude") } icon: {
-                        providerMark("ProviderMarkClaude")
-                            .foregroundStyle(Color(nsColor: ProviderShape.claudeBrand))
-                    } }
+                    } label: { Label { Text("Claude") } icon: { providerMark(.claudeMark) } }
                         .help("Opens claude.ai in your browser to sign in")
                     Button {
                         Task { await viewModel.beginAddAccountLogin(provider: .openai) }
-                    } label: { Label { Text("OpenAI / Codex") } icon: { providerMark("ProviderMarkOpenAI") } }
+                    } label: { Label { Text("OpenAI / Codex") } icon: { providerMark(.openAIMark) } }
                         .help("Opens auth.openai.com in your browser to sign in with your ChatGPT account")
                 } label: {
                     Label("Add account…", systemImage: "plus.circle")

@@ -40,9 +40,9 @@ enum MenuBarImage {
 
     /// The multi-account compact image: a colored dot + `X 45%` segment per account,
     /// separated by a middot. Text uses the dynamic label color so it adapts to light/dark.
-    /// When providers are mixed the dot becomes the provider's own mark, drawn in its brand
-    /// color (a trademark never carries severity), and the percent text carries the severity
-    /// color the dot used to carry. Single-provider output is unchanged.
+    /// When providers are mixed the 7 pt dot becomes the provider's own 11 pt mark, drawn in
+    /// its brand color (a trademark never carries severity), and the percent text carries the
+    /// severity color the dot used to carry. Single-provider output is unchanged.
     static func multiAccount(
         accounts: [Account],
         snapshots: [UUID: UsageSnapshot],
@@ -71,9 +71,10 @@ enum MenuBarImage {
         let sepAttrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor.tertiaryLabelColor]
         let tagGap: CGFloat = 2
 
-        // The provider marks need a little more room than the dot to read at menu-bar size;
-        // the dot keeps its 7 pt so single-provider output stays pixel-identical.
-        let markSize: CGFloat = mixed ? 9 : 7
+        // The provider marks need more room than the dot to read at menu-bar size: 11 pt,
+        // the most that stays comfortably inside the 18 pt image. The dot keeps its 7 pt so
+        // single-provider output stays pixel-identical.
+        let markSize: CGFloat = mixed ? 11 : 7
         let dotGap: CGFloat = 3
         let segGap: CGFloat = 5
         let height: CGFloat = 18
@@ -167,7 +168,8 @@ enum MenuBarImage {
 
         let barW: CGFloat = 26, barH: CGFloat = 4.5
         let gap: CGFloat = 3, prefixGap: CGFloat = 4, clusterGap: CGFloat = 7
-        let glyph: CGFloat = 9, glyphGap: CGFloat = 3
+        // 11 pt mark, matching the compact bar and still inside the 20 pt image.
+        let glyph: CGFloat = 11, glyphGap: CGFloat = 3
         let height: CGFloat = 20
         let rowCenterTop = height - 6, rowCenterBot: CGFloat = 6
 

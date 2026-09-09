@@ -37,6 +37,30 @@ struct ProviderShapeTests {
         }
     }
 
+    @Test("A menu image is square at the asked point size, orange for Claude, template for OpenAI")
+    func menuImages() throws {
+        #expect(ProviderShape.dot.menuImage(pointSize: 14) == nil)
+        for shape in [ProviderShape.claudeMark, .openAIMark] {
+            let image = try #require(shape.menuImage(pointSize: 14), "\(shape)")
+            #expect(image.size == NSSize(width: 14, height: 14), "\(shape)")
+        }
+        // OpenAI's stays a template so the menu tints it; Claude's carries baked-in orange,
+        // since SwiftUI's NSMenuItem bridge drops `.foregroundStyle`.
+        #expect(try #require(ProviderShape.openAIMark.menuImage(pointSize: 14)).isTemplate)
+        let claude = try #require(ProviderShape.claudeMark.menuImage(pointSize: 14))
+        #expect(!claude.isTemplate)
+        let rep = try #require(claude.tiffRepresentation.flatMap(NSBitmapImageRep.init(data:)))
+        let painted = (0..<rep.pixelsWide).flatMap { x in
+            (0..<rep.pixelsHigh).compactMap { y -> NSColor? in
+                guard let c = rep.colorAt(x: x, y: y)?.usingColorSpace(.sRGB),
+                      c.alphaComponent > 0.5 else { return nil }
+                return c
+            }
+        }
+        #expect(!painted.isEmpty)
+        #expect(painted.allSatisfy { $0.redComponent > $0.greenComponent && $0.greenComponent > $0.blueComponent })
+    }
+
     @Test("Claude's mark carries its brand color; OpenAI's has none")
     func brandColors() throws {
         let claude = try #require(ProviderShape.claudeMark.brandColor?.usingColorSpace(.sRGB))
@@ -91,7 +115,7 @@ struct ProviderShapeTests {
 
         let singleCompact = MenuBarImage.multiAccount(accounts: [a, b], snapshots: [a.id: snap, b.id: snap], mode: .fiveHour)
         let mixedCompact = MenuBarImage.multiAccount(accounts: [a, c], snapshots: [a.id: snap, c.id: snap], mode: .fiveHour)
-        // The 9 pt provider mark is wider than the 7 pt dot it replaces.
+        // The 11 pt provider mark is wider than the 7 pt dot it replaces.
         #expect(mixedCompact.size.width > singleCompact.size.width)
         #expect(mixedCompact.tiffRepresentation != singleCompact.tiffRepresentation)
     }

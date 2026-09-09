@@ -235,7 +235,7 @@ struct AccountsViewModelOpenAILoginTests {
     }
 
     @Test("A login whose identity check is rejected with 401 keeps the generic verify message")
-    func browserLoginRejectionIsNotReportedAsExpired() async {
+    func identityRejectionKeepsGenericMessage() async {
         let script = Script()
         script.openAIIdentity = .failure(UsageAPIError.invalidResponse(401))
         let vm = makeVM(script)

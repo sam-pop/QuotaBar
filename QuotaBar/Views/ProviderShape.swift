@@ -45,6 +45,24 @@ enum ProviderShape: Equatable {
         return image
     }
 
+    /// The mark as an `NSMenuItem` image. Menu items size by `NSImage.size` — SwiftUI's
+    /// bridge to `NSMenuItem` drops a `.frame` on a non-SF image — so the copy carries its own
+    /// size. The bridge drops `.foregroundStyle` too, so Claude's orange is baked in here;
+    /// OpenAI's mark stays a template, which the menu tints itself (white on a highlighted
+    /// row). nil for `.dot`, which has no image.
+    func menuImage(pointSize: CGFloat) -> NSImage? {
+        guard let mark = image?.copy() as? NSImage else { return nil }
+        mark.size = NSSize(width: pointSize, height: pointSize)
+        mark.isTemplate = true
+        guard let brandColor else { return mark }
+        return NSImage(size: mark.size, flipped: false) { rect in
+            mark.draw(in: rect)
+            brandColor.setFill()
+            rect.fill(using: .sourceAtop)
+            return true
+        }
+    }
+
     /// Draws the mark into `rect`. The dot is filled with `severity` (today's behavior). The
     /// provider marks are trademarks and never carry severity: they are drawn as template
     /// images in `brandColor` — Claude's orange, or the label color when the brand mark is

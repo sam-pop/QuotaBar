@@ -98,7 +98,7 @@ struct UsageMatrixView: View {
                     // so it takes the label's tertiary style. Never the severity color.
                     Image(account.provider == .anthropic ? "ProviderMarkClaude" : "ProviderMarkOpenAI")
                         .renderingMode(.template)
-                        .resizable().scaledToFit().frame(height: 8)
+                        .resizable().scaledToFit().frame(height: 10)
                         .foregroundStyle(account.provider == .anthropic
                                          ? AnyShapeStyle(Color(nsColor: ProviderShape.claudeBrand))
                                          : AnyShapeStyle(HierarchicalShapeStyle.tertiary))
