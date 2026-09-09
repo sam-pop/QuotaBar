@@ -307,6 +307,20 @@ struct UsageMatrixView: View {
             TextField("Label", text: $draftLabel).textFieldStyle(.roundedBorder)
             TextField("Menu-bar code", text: $draftShortCode).textFieldStyle(.roundedBorder)
                 .help("Menu-bar prefix (e.g. P, W, 🏠). Blank = auto from the label.")
+            // The popover is bound to `editingID`, which a move doesn't touch, so it stays
+            // open and several moves in a row work without reopening it.
+            HStack {
+                Button {
+                    viewModel.moveAccount(account.id, by: -1)
+                } label: { Label("Move left", systemImage: "arrow.left") }
+                    .disabled(viewModel.accounts.first?.id == account.id)
+                Button {
+                    viewModel.moveAccount(account.id, by: 1)
+                } label: { Label("Move right", systemImage: "arrow.right") }
+                    .disabled(viewModel.accounts.last?.id == account.id)
+                Spacer()
+            }
+            .controlSize(.small)
             HStack {
                 Spacer()
                 Button("Cancel") { editingID = nil }

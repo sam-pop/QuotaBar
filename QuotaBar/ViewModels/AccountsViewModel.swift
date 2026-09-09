@@ -831,6 +831,20 @@ final class AccountsViewModel: ObservableObject {
         updateAccount(id) { $0.shortCode = (trimmed?.isEmpty == true) ? nil : trimmed }
     }
 
+    /// Swaps an account with its neighbor — `offset` -1 moves it left, +1 right. The order
+    /// is user-visible twice over: it is the matrix's column order and the menu bar's segment
+    /// order, so it is persisted immediately. An unknown id or a target past either end does
+    /// nothing (the ends don't wrap). Runtimes, snapshots and credentials are all keyed by id,
+    /// so nothing but the order moves; the per-column identity colors are by position and
+    /// follow the account to its new slot.
+    func moveAccount(_ id: UUID, by offset: Int) {
+        guard let index = accounts.firstIndex(where: { $0.id == id }) else { return }
+        let target = index + offset
+        guard accounts.indices.contains(target) else { return }
+        accounts.swapAt(index, target)
+        accountsStore.save(accounts)
+    }
+
     private func updateAccount(_ id: UUID, _ mutate: (inout Account) -> Void) {
         guard let index = accounts.firstIndex(where: { $0.id == id }) else { return }
         mutate(&accounts[index])
