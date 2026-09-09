@@ -1,6 +1,6 @@
 # QuotaBar
 
-A lightweight macOS menu bar app that shows your Claude API usage limits at a glance. Zero dependencies — just Apple frameworks.
+A lightweight macOS menu bar app that shows your Claude and OpenAI (Codex) usage limits at a glance. Zero dependencies — just Apple frameworks.
 
 > Formerly ClaudeUsageBar; renamed when OpenAI/Codex support landed. Existing installs keep working — the bundle identifier and Keychain item are unchanged.
 
