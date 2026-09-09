@@ -71,8 +71,11 @@ struct UsagePopoverView: View {
 
     private var header: some View {
         HStack {
-            Image(systemName: "gauge.with.dots.needle.33percent").foregroundStyle(Color.accentColor)
-            Text("QuotaBar").font(.system(.headline, weight: .semibold))
+            // The symbol takes the title's own font so it scales with it and sits on the
+            // same cap height.
+            Image(systemName: "gauge.with.dots.needle.33percent")
+                .font(.title3).foregroundStyle(Color.accentColor)
+            Text("QuotaBar").font(.system(.title3, weight: .semibold))
             Spacer()
         }
         .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 10)

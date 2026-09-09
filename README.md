@@ -67,7 +67,7 @@ In the popover, each account has a **✎** to rename it and set a custom **menu-
 
 ### Per-model limits
 
-When the API reports model-scoped weekly limits (e.g. **Fable**), each account's popover shows a **Per-model (weekly)** section with the model name, its percentage, a progress bar, and the reset countdown. This surfaces per-model caps that the top-level 5-hour / 7-day numbers don't reflect.
+When the API reports model-scoped weekly limits (e.g. **Fable**), the popover shows them alongside the usual windows — they surface per-model caps that the top-level 5-hour / 7-day numbers don't reflect. With a single account they get their own **Per-model (weekly)** section, listing each model's name, percentage, progress bar, and reset countdown. With two or more accounts, each column shows its model limits as secondary lines inside that account's **7-Day** cell — same name, percentage, mini bar, and reset. A provider that reports no per-model caps (OpenAI) simply shows nothing extra.
 
 | Target | Description |
 |--------|-------------|
