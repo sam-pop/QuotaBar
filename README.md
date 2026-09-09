@@ -85,7 +85,7 @@ The browser's current ChatGPT session decides which account signs in. To add a *
 
 OpenAI shows a 5-hour and a weekly window, which land on the same rows as Claude's. OpenAI does not report a login expiry, so OpenAI accounts show no "login expires in" countdown; a login that stops refreshing gets the same red **Log in again** pill.
 
-When your accounts span both providers, the menu bar marks each one with its provider's logo (monochrome, never recolored) instead of a dot, and each column in the popover gets a provider chip. With one provider, nothing changes.
+When your accounts span both providers, the menu bar marks each one with its provider's logo (Claude in its brand orange, OpenAI monochrome; never tinted by usage level) instead of a dot, and each column in the popover gets a provider chip. With one provider, nothing changes.
 
 ## Screenshots
 

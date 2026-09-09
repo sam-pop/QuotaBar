@@ -1,8 +1,8 @@
 import Foundation
 
 /// Pure comparison helpers for the multi-account matrix popover, where each usage window is
-/// a row and each account a column. Kept SwiftUI-free so the "who's highest" and
-/// "which model rows exist" decisions are unit-testable.
+/// a row and each account a column. Kept SwiftUI-free so the "who's highest" decision is
+/// unit-testable.
 enum UsageComparison {
 
     /// Flags the cell(s) holding the highest value in a metric row, for "peak" highlighting.
@@ -19,19 +19,5 @@ enum UsageComparison {
             return Array(repeating: false, count: percents.count)
         }
         return percents.map { $0 == maxVal }
-    }
-
-    /// Ordered, de-duplicated union of model names across accounts (first-seen order), so
-    /// each distinct model (e.g. "Fable") gets exactly one row even when only some accounts
-    /// report it.
-    static func modelRowNames(_ perAccount: [[ModelLimit]]) -> [String] {
-        var seen = Set<String>()
-        var names: [String] = []
-        for models in perAccount {
-            for model in models where seen.insert(model.modelName).inserted {
-                names.append(model.modelName)
-            }
-        }
-        return names
     }
 }

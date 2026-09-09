@@ -19,16 +19,11 @@ struct UsageMatrixView: View {
     private struct CellData {
         let percent: Int
         let resetsAt: Date?
-        let critical: Bool
     }
 
     /// Same rule as the menu bar: name the provider only when there is more than one.
     private var mixedProviders: Bool {
         MultiAccountMenuBar.providerShapes(for: columns.map(\.account.provider))
-    }
-
-    private var modelNames: [String] {
-        UsageComparison.modelRowNames(columns.map { $0.snapshot?.modelLimits ?? [] })
     }
 
     var body: some View {
@@ -38,16 +33,15 @@ struct UsageMatrixView: View {
             let now = context.date
             VStack(spacing: 0) {
                 headerRow(now: now)
-                metricRow(title: "5-Hour", subtitle: "session") { snap in
+                metricRow(title: "5-Hour", subtitle: "session", now: now) { snap in
                     CellData(percent: snap.fiveHourEffectivePercent(now: now),
-                             resetsAt: snap.fiveHourResetsAt, critical: false)
+                             resetsAt: snap.fiveHourResetsAt)
                 }
-                metricRow(title: "7-Day", subtitle: "weekly") { snap in
+                // Per-model limits are weekly windows, so they live inside this row's cells
+                // rather than in rows of their own.
+                metricRow(title: "7-Day", subtitle: "weekly", now: now, perModel: true) { snap in
                     CellData(percent: snap.sevenDayEffectivePercent(now: now),
-                             resetsAt: snap.sevenDayResetsAt, critical: false)
-                }
-                ForEach(modelNames, id: \.self) { name in
-                    modelRow(name: name, now: now)
+                             resetsAt: snap.sevenDayResetsAt)
                 }
                 trendRow
             }
@@ -94,14 +88,18 @@ struct UsageMatrixView: View {
             }
             if mixedProviders {
                 HStack(spacing: 3) {
-                    // Claude's mark in its brand orange; OpenAI's brand mark is black/white,
-                    // so it takes the label's tertiary style. Never the severity color.
-                    Image(account.provider == .anthropic ? "ProviderMarkClaude" : "ProviderMarkOpenAI")
-                        .renderingMode(.template)
-                        .resizable().scaledToFit().frame(height: 10)
-                        .foregroundStyle(account.provider == .anthropic
-                                         ? AnyShapeStyle(Color(nsColor: ProviderShape.claudeBrand))
-                                         : AnyShapeStyle(HierarchicalShapeStyle.tertiary))
+                    // The same asset the menu bar draws, via `ProviderShape` so no asset name
+                    // is spelled out here. Claude's mark in its brand orange; OpenAI's brand
+                    // mark is black/white, so it takes the label's tertiary style. Never the
+                    // severity color.
+                    if let mark = ProviderShape.mark(for: account.provider, mixed: true).image {
+                        Image(nsImage: mark)
+                            .renderingMode(.template)
+                            .resizable().scaledToFit().frame(height: 10)
+                            .foregroundStyle(account.provider == .anthropic
+                                             ? AnyShapeStyle(Color(nsColor: ProviderShape.claudeBrand))
+                                             : AnyShapeStyle(HierarchicalShapeStyle.tertiary))
+                    }
                     Text(account.provider.displayName.uppercased()).font(.system(size: 8, weight: .semibold)).tracking(0.4)
                 }
                 .foregroundStyle(.tertiary)
@@ -174,7 +172,9 @@ struct UsageMatrixView: View {
 
     // MARK: - Metric rows
 
-    private func metricRow(title: String, subtitle: String,
+    /// `perModel` adds each account's per-model weekly limits inside its own cell — only the
+    /// 7-Day row asks for them, since that is the window they measure.
+    private func metricRow(title: String, subtitle: String, now: Date, perModel: Bool = false,
                            value: @escaping (UsageSnapshot) -> CellData) -> some View {
         let data: [CellData?] = columns.map { $0.snapshot.map(value) }
         let flags = UsageComparison.leaders(data.map { $0?.percent })
@@ -182,35 +182,18 @@ struct UsageMatrixView: View {
             labelCell(title, subtitle)
             ForEach(columns.indices, id: \.self) { index in
                 columnDivider(index)
-                metricCell(data[index], leader: flags[index])
-            }
-        }
-        .overlay(alignment: .bottom) { Divider().opacity(0.5) }
-    }
-
-    private func modelRow(name: String, now: Date) -> some View {
-        let data: [CellData?] = columns.map { column in
-            guard let limit = column.snapshot?.modelLimits?.first(where: { $0.modelName == name }) else { return nil }
-            let percent = UsageSnapshot.effectivePercent(limit.percent, resetsAt: limit.resetsAt, now: now)
-            return CellData(percent: percent, resetsAt: limit.resetsAt,
-                            critical: limit.severity == "critical")
-        }
-        let flags = UsageComparison.leaders(data.map { $0?.percent })
-        return row {
-            labelCell(name, "model · wk")
-            ForEach(columns.indices, id: \.self) { index in
-                columnDivider(index)
-                metricCell(data[index], leader: flags[index])
+                metricCell(data[index], leader: flags[index], now: now,
+                           models: perModel ? (columns[index].snapshot?.modelLimits ?? []) : [])
             }
         }
         .overlay(alignment: .bottom) { Divider().opacity(0.5) }
     }
 
     @ViewBuilder
-    private func metricCell(_ data: CellData?, leader: Bool) -> some View {
+    private func metricCell(_ data: CellData?, leader: Bool, now: Date, models: [ModelLimit]) -> some View {
         Group {
             if let data {
-                let color: Color = (data.critical && data.percent > 0) ? .red : UsageColor.level(data.percent)
+                let color: Color = UsageColor.level(data.percent)
                 VStack(alignment: .leading, spacing: 5) {
                     HStack(alignment: .firstTextBaseline, spacing: 4) {
                         Text("\(data.percent)%")
@@ -226,6 +209,12 @@ struct UsageMatrixView: View {
                     Text("resets \(UsageFormatting.resetCountdown(until: data.resetsAt))")
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundStyle(.tertiary).lineLimit(1)
+                    // Per-model lines, in the order the snapshot lists them. Secondary weight
+                    // throughout: these are a breakdown of the row above, and PEAK stays on the
+                    // shared rows. A column without model limits renders nothing at all.
+                    ForEach(models) { limit in
+                        modelLine(limit, now: now)
+                    }
                 }
             } else {
                 Text("—").font(.system(size: 15)).foregroundStyle(.quaternary)
@@ -239,6 +228,27 @@ struct UsageMatrixView: View {
                 Capsule().fill(Color.orange).frame(width: 2.5).padding(.vertical, 8)
             }
         }
+    }
+
+    /// One per-model weekly limit, folded under the 7-Day numbers. Same rollover and
+    /// "critical" rule as the single-account `AccountRowView` section.
+    private func modelLine(_ limit: ModelLimit, now: Date) -> some View {
+        let shown = UsageSnapshot.effectivePercent(limit.percent, resetsAt: limit.resetsAt, now: now)
+        let color: Color = (limit.severity == "critical" && shown > 0) ? .red : UsageColor.level(shown)
+        return VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(limit.modelName).font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.secondary).lineLimit(1)
+                Spacer(minLength: 2)
+                Text("\(shown)%").font(.system(size: 10, weight: .semibold))
+                    .monospacedDigit().foregroundStyle(color)
+            }
+            ProgressBarView(percent: shown, color: color, height: 3)
+            Text("resets \(UsageFormatting.resetCountdown(until: limit.resetsAt))")
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundStyle(.tertiary).lineLimit(1)
+        }
+        .padding(.top, 2)
     }
 
     // MARK: - Trend row

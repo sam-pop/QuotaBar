@@ -53,7 +53,6 @@ enum ProviderShape: Equatable {
     func menuImage(pointSize: CGFloat) -> NSImage? {
         guard let mark = image?.copy() as? NSImage else { return nil }
         mark.size = NSSize(width: pointSize, height: pointSize)
-        mark.isTemplate = true
         guard let brandColor else { return mark }
         return NSImage(size: mark.size, flipped: false) { rect in
             mark.draw(in: rect)

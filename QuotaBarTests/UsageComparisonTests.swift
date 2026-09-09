@@ -33,23 +33,3 @@ struct UsageComparisonLeadersTests {
         #expect(UsageComparison.leaders([nil, 40, 80]) == [false, false, true])
     }
 }
-
-@Suite("UsageComparison.modelRowNames")
-struct UsageComparisonModelRowTests {
-
-    private func limit(_ name: String) -> ModelLimit {
-        ModelLimit(modelName: name, percent: 0, resetsAt: nil, severity: nil)
-    }
-
-    @Test("Unions model names across accounts in first-seen order, de-duplicated")
-    func union() {
-        let a = [limit("Fable"), limit("Opus")]
-        let b = [limit("Fable"), limit("Sonnet")]
-        #expect(UsageComparison.modelRowNames([a, b]) == ["Fable", "Opus", "Sonnet"])
-    }
-
-    @Test("No models yields no rows")
-    func empty() {
-        #expect(UsageComparison.modelRowNames([[], []]) == [])
-    }
-}

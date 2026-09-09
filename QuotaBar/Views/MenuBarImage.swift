@@ -130,7 +130,7 @@ enum MenuBarImage {
         let sep = NSAttributedString(string: "·", attributes: sepAttrs)
         for (index, segment) in segments.enumerated() {
             if index > 0 { width += sep.size().width + segGap * 2 }
-            if segment.dotColor != nil { width += markSize + dotGap }
+            if segment.dotColor != nil || mixed { width += markSize + dotGap }
             width += pieces(segment).reduce(0) { $0 + $1.size().width }
             if let tag = segment.tag {
                 width += tagGap + NSAttributedString(string: tag, attributes: tagAttrs).size().width
@@ -147,10 +147,13 @@ enum MenuBarImage {
                     sep.draw(at: NSPoint(x: x, y: (height - sepSize.height) / 2))
                     x += sepSize.width + segGap
                 }
-                if let severity = segment.dotColor {
+                // Mixed: every account shows its provider mark, reading or not — the mark never
+                // carried severity anyway, so a signed-out column is not the odd one out. Not
+                // mixed: no reading still means no dot, exactly as before.
+                if segment.dotColor != nil || mixed {
                     segment.shape.draw(in: NSRect(x: x, y: (height - markSize) / 2,
                                                   width: markSize, height: markSize),
-                                       severity: severity)
+                                       severity: segment.dotColor ?? .labelColor)
                     x += markSize + dotGap
                 }
                 // A provider mark keeps its own color, so the number carries severity — the

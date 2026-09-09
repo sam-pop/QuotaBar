@@ -171,6 +171,26 @@ struct ProviderShapeTests {
         try check(90, light: 0xCF_22_2E, dark: 0xF8_51_49)
     }
 
+    @Test("In mixed mode a column with no reading still gets its provider mark")
+    func mixedMarksAColumnWithoutASnapshot() {
+        let a = Account(label: "P", provider: .anthropic)
+        let c = Account(label: "W", provider: .openai)
+        let snap = UsageSnapshot(fiveHourPercent: 40, sevenDayPercent: 60, fiveHourResetsAt: nil, sevenDayResetsAt: nil, fetchedAt: Date())
+        let image = MenuBarImage.multiAccount(accounts: [a, c], snapshots: [a.id: snap], mode: .fiveHour)
+
+        let font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+        func width(_ s: String) -> CGFloat {
+            NSAttributedString(string: s, attributes: [.font: font]).size().width
+        }
+        // Both segments carry the 11 pt mark + 3 pt gap, including the one with no reading.
+        // The first is drawn as two strings (prefix, then the severity-colored percent), the
+        // second — "--%" is never severity-colored — as one.
+        let expected = ceil((11 + 3 + width("P ") + width("40%"))
+                            + (5 + width("·") + 5)
+                            + (11 + 3 + width("W --%"))) + 2
+        #expect(image.size.width == expected)
+    }
+
     @Test("A single-provider compact bar still lays out the 7 pt dot")
     func singleProviderKeepsTheDotLayout() {
         let a = Account(label: "P", provider: .anthropic)
