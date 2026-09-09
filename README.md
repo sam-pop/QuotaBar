@@ -97,7 +97,7 @@ When your accounts span both providers, the menu bar marks each one with its pro
 
 **Popover** — accounts side by side, one row per usage window so the same stat is easy to compare; the higher account in each row is flagged `PEAK`, and an account whose login has expired gets a one-tap **Log in again** pill:
 
-<img src="screenshots/popover-matrix.png" width="443" alt="Multi-account comparison popover">
+<img src="screenshots/popover-matrix.png" width="606" alt="Multi-account comparison popover with Claude and OpenAI accounts">
 
 ## How It Works
 
