@@ -8,7 +8,7 @@ struct MenuBarSelectionTests {
 
     // Resets sit in the future relative to `testNow`, so the windows are live (not expired).
     private let testNow = Date(timeIntervalSince1970: 50)
-    private func snapshot(fiveHour: Int, sevenDay: Int) -> UsageSnapshot {
+    private func snapshot(fiveHour: Int?, sevenDay: Int) -> UsageSnapshot {
         UsageSnapshot(
             fiveHourPercent: fiveHour,
             sevenDayPercent: sevenDay,
@@ -61,6 +61,16 @@ struct MenuBarSelectionTests {
         #expect(auto.window == .sevenDay)
         #expect(auto.percent == 20)
     }
+
+    @Test("An account with no 5-hour window resolves to the 7-day window in every mode")
+    func noFiveHourWindowUsesSevenDay() throws {
+        for mode in MenuBarDisplayMode.allCases {
+            let active = try #require(MenuBarSelection.active(mode: mode, snapshot: snapshot(fiveHour: nil, sevenDay: 10), now: testNow))
+            #expect(active.window == .sevenDay)
+            #expect(active.percent == 10)
+            #expect(active.resetsAt == Date(timeIntervalSince1970: 200))
+        }
+    }
 }
 
 // MARK: - ThresholdTracker
@@ -91,6 +101,13 @@ struct ThresholdTrackerTests {
         #expect(tracker.record(fiveHour: 50, sevenDay: 82).isEmpty)
         let rearmed = tracker.record(fiveHour: 88, sevenDay: 82)
         #expect(rearmed == [ThresholdTracker.Crossing(window: .fiveHour, threshold: 80, percent: 88)])
+    }
+
+    @Test("A missing 5-hour window fires no 5-hour crossing but still tracks the 7-day one")
+    func noFiveHourWindow() {
+        var tracker = ThresholdTracker(thresholds: [80, 90])
+        #expect(tracker.record(fiveHour: nil, sevenDay: 85) == [ThresholdTracker.Crossing(window: .sevenDay, threshold: 80, percent: 85)])
+        #expect(tracker.record(fiveHour: nil, sevenDay: 85).isEmpty)
     }
 
     @Test("sanitizedThresholds sorts, clamps, dedupes, drops junk, and falls back to default")

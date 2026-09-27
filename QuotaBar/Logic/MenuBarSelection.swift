@@ -15,11 +15,14 @@ enum MenuBarSelection {
     /// Auto mode picks the higher-utilization window; ties go to the 5-hour window (`>=`).
     /// Percents are the *effective* values for `now`: a window whose reset has passed reads
     /// 0, so a stale pre-reset value never sticks and auto never favors an already-reset window.
+    /// An account with no 5-hour window always resolves to the 7-day window, in every mode.
     static func active(mode: MenuBarDisplayMode, snapshot: UsageSnapshot?, now: Date = Date()) -> Active? {
         guard let s = snapshot else { return nil }
 
-        let fiveHour = s.fiveHourEffectivePercent(now: now)
         let sevenDay = s.sevenDayEffectivePercent(now: now)
+        guard let fiveHour = s.fiveHourEffectivePercent(now: now) else {
+            return Active(window: .sevenDay, percent: sevenDay, resetsAt: s.sevenDayResetsAt)
+        }
 
         let useFiveHour: Bool
         switch mode {

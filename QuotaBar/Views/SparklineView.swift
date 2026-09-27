@@ -10,7 +10,12 @@ struct SparklineView: View {
                     ZStack {
                         gridLines(height: geo.size.height, width: geo.size.width)
                         sparklinePath(geo: geo, values: dataPoints.map(\.sevenDayPercent), color: .orange)
-                        sparklinePath(geo: geo, values: dataPoints.map(\.fiveHourPercent), color: .blue)
+                        // Only when every point has a 5h value, so the line stays aligned with
+                        // the 7d one; an account without a 5-hour window gets no 5h line.
+                        let fiveHour = dataPoints.compactMap(\.fiveHourPercent)
+                        if fiveHour.count == dataPoints.count {
+                            sparklinePath(geo: geo, values: fiveHour, color: .blue)
+                        }
                     }
                 }
                 .frame(height: 40)

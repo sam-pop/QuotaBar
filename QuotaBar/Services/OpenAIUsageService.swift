@@ -8,9 +8,12 @@ struct OpenAIUsageResponse: Decodable {
         let usedPercent: Double
         /// Unix epoch seconds.
         let resetAt: Double?
+        /// The window's length: 18000 for the 5-hour window, 604800 for the 7-day one.
+        let limitWindowSeconds: Double?
         enum CodingKeys: String, CodingKey {
             case usedPercent = "used_percent"
             case resetAt = "reset_at"
+            case limitWindowSeconds = "limit_window_seconds"
         }
     }
     struct RateLimit: Decodable {
@@ -38,21 +41,31 @@ enum OpenAIUsage {
         try JSONDecoder().decode(OpenAIUsageResponse.self, from: data)
     }
 
-    /// Synthesizes the Anthropic-shaped `UsageResponse` the runtime already consumes:
-    /// primary window → `five_hour`, secondary → `seven_day`. Formatting the epoch as an
-    /// ISO-8601 string that `UsageSnapshot` immediately re-parses is deliberate — three
-    /// lines here versus changing the fetch seam and every test that stubs it. Primary is
-    /// required; a missing secondary window (not observed live; defensive) reads as 0% with
-    /// no reset. The window lengths are not checked: primary is assumed to be the 5-hour
-    /// window and secondary the 7-day one, as the spike observed.
+    /// Synthesizes the Anthropic-shaped `UsageResponse` the runtime already consumes.
+    /// Formatting the epoch as an ISO-8601 string that `UsageSnapshot` immediately re-parses
+    /// is deliberate — three lines here versus changing the fetch seam and every test that
+    /// stubs it.
+    ///
+    /// When exactly one window is longer than a day it is `seven_day` and the other, if any,
+    /// is `five_hour` — so a weekly-only plan has no 5-hour window. Otherwise the windows map
+    /// by position as the spike observed: primary → `five_hour`, secondary → `seven_day`. A
+    /// missing 7-day window (not observed live; defensive) reads as 0% with no reset; no
+    /// window at all is a decode failure.
     static func usageResponse(from response: OpenAIUsageResponse) throws -> UsageResponse {
-        guard let primary = response.rateLimit?.primaryWindow else {
+        let primary = response.rateLimit?.primaryWindow
+        let secondary = response.rateLimit?.secondaryWindow
+        let windows = [primary, secondary].compactMap { $0 }
+        guard !windows.isEmpty else {
             throw UsageAPIError.decodingFailed(MissingWindow())
         }
-        let secondary = response.rateLimit?.secondaryWindow
+        let isWeekly = { (window: OpenAIUsageResponse.Window) in (window.limitWindowSeconds ?? 0) > 86_400 }
+        let weekly = windows.filter(isWeekly)
+        let (fiveHour, sevenDay) = weekly.count == 1
+            ? (windows.first { !isWeekly($0) }, weekly.first)
+            : (primary, secondary)
         return UsageResponse(
-            fiveHour: UsagePeriod(utilization: primary.usedPercent, resetsAt: iso8601(primary.resetAt)),
-            sevenDay: UsagePeriod(utilization: secondary?.usedPercent ?? 0, resetsAt: iso8601(secondary?.resetAt)),
+            fiveHour: fiveHour.map { UsagePeriod(utilization: $0.usedPercent, resetsAt: iso8601($0.resetAt)) },
+            sevenDay: UsagePeriod(utilization: sevenDay?.usedPercent ?? 0, resetsAt: iso8601(sevenDay?.resetAt)),
             limits: nil)
     }
 
@@ -61,7 +74,7 @@ enum OpenAIUsage {
     }
 
     private struct MissingWindow: LocalizedError {
-        var errorDescription: String? { "Usage response had no primary window" }
+        var errorDescription: String? { "Usage response had no usage window" }
     }
 
     /// `""` for a missing epoch: `UsageSnapshot`'s parser turns it into a nil reset date.

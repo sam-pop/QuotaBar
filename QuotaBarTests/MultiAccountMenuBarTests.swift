@@ -64,13 +64,18 @@ struct MultiAccountMenuBarTests {
         #expect(MultiAccountMenuBar.worstPercent([]) == nil)
     }
 
-    @Test("Window tag is shown only in auto mode")
+    @Test("Window tag: every account in auto, only 7-day readings in fixed 5h, never in 7d or bars")
     func windowTag() {
         // Auto mode: tag reflects each account's chosen window.
         #expect(MultiAccountMenuBar.windowTag(mode: .auto, window: .fiveHour) == "5h")
         #expect(MultiAccountMenuBar.windowTag(mode: .auto, window: .sevenDay) == "7d")
-        // Explicit modes: all accounts share the window, so no per-account tag.
+        // Fixed 5h: an account with no 5-hour window falls back to 7d, so only it is tagged.
         #expect(MultiAccountMenuBar.windowTag(mode: .fiveHour, window: .fiveHour) == nil)
+        #expect(MultiAccountMenuBar.windowTag(mode: .fiveHour, window: .sevenDay) == "7d")
+        // Fixed 7d: every account shows the 7-day window.
         #expect(MultiAccountMenuBar.windowTag(mode: .sevenDay, window: .sevenDay) == nil)
+        // Bars draws both windows with its own row labels.
+        #expect(MultiAccountMenuBar.windowTag(mode: .bars, window: .fiveHour) == nil)
+        #expect(MultiAccountMenuBar.windowTag(mode: .bars, window: .sevenDay) == nil)
     }
 }

@@ -163,7 +163,7 @@ enum MenuBarImage {
                     piece.draw(at: NSPoint(x: x, y: (height - pieceSize.height) / 2))
                     x += pieceSize.width
                 }
-                // Auto-mode window tag ("5h"/"7d"), drawn slightly raised and smaller.
+                // Window tag ("5h"/"7d", see `windowTag`), drawn slightly raised and smaller.
                 if let tag = segment.tag {
                     x += tagGap
                     let tagStr = NSAttributedString(string: tag, attributes: tagAttrs)
@@ -210,9 +210,10 @@ enum MenuBarImage {
             guard let s = snapshots[account.id] else {
                 return Cluster(prefix: prefix, p5: nil, p7: nil, num5: "--", num7: "--", shape: shape)
             }
-            let p5 = UsageSnapshot.effectivePercent(s.fiveHourPercent, resetsAt: s.fiveHourResetsAt, now: now)
-            let p7 = UsageSnapshot.effectivePercent(s.sevenDayPercent, resetsAt: s.sevenDayResetsAt, now: now)
-            return Cluster(prefix: prefix, p5: p5, p7: p7, num5: "\(p5)%", num7: "\(p7)%", shape: shape)
+            let p5 = s.fiveHourEffectivePercent(now: now)
+            let p7 = s.sevenDayEffectivePercent(now: now)
+            // No 5-hour window: an empty 5h row, drawn like the no-snapshot case.
+            return Cluster(prefix: prefix, p5: p5, p7: p7, num5: p5.map { "\($0)%" } ?? "--", num7: "\(p7)%", shape: shape)
         }
 
         let barW: CGFloat = 26, barH: CGFloat = 4.5

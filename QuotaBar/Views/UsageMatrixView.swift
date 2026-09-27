@@ -34,8 +34,9 @@ struct UsageMatrixView: View {
             VStack(spacing: 0) {
                 headerRow(now: now)
                 metricRow(title: "5-Hour", subtitle: "session", now: now) { snap in
-                    CellData(percent: snap.fiveHourEffectivePercent(now: now),
-                             resetsAt: snap.fiveHourResetsAt)
+                    snap.fiveHourEffectivePercent(now: now).map {
+                        CellData(percent: $0, resetsAt: snap.fiveHourResetsAt)
+                    }
                 }
                 // Per-model limits are weekly windows, so they live inside this row's cells
                 // rather than in rows of their own.
@@ -179,8 +180,8 @@ struct UsageMatrixView: View {
     /// `perModel` adds each account's per-model weekly limits inside its own cell — only the
     /// 7-Day row asks for them, since that is the window they measure.
     private func metricRow(title: String, subtitle: String, now: Date, perModel: Bool = false,
-                           value: @escaping (UsageSnapshot) -> CellData) -> some View {
-        let data: [CellData?] = columns.map { $0.snapshot.map(value) }
+                           value: @escaping (UsageSnapshot) -> CellData?) -> some View {
+        let data: [CellData?] = columns.map { $0.snapshot.flatMap(value) }
         let flags = UsageComparison.leaders(data.map { $0?.percent })
         return row {
             labelCell(title, subtitle)
