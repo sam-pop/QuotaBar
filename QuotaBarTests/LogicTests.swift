@@ -110,6 +110,14 @@ struct ThresholdTrackerTests {
         #expect(tracker.record(fiveHour: nil, sevenDay: 85).isEmpty)
     }
 
+    @Test("A 5h window that disappears is re-armed, so it fires again if it returns high")
+    func fiveHourWindowReturns() {
+        var tracker = ThresholdTracker(thresholds: [80])
+        #expect(tracker.record(fiveHour: 85, sevenDay: 0) == [ThresholdTracker.Crossing(window: .fiveHour, threshold: 80, percent: 85)])
+        #expect(tracker.record(fiveHour: nil, sevenDay: 0).isEmpty)
+        #expect(tracker.record(fiveHour: 85, sevenDay: 0) == [ThresholdTracker.Crossing(window: .fiveHour, threshold: 80, percent: 85)])
+    }
+
     @Test("sanitizedThresholds sorts, clamps, dedupes, drops junk, and falls back to default")
     func sanitize() {
         // Valid, already-sorted input passes through.

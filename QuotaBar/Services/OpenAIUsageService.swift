@@ -8,7 +8,7 @@ struct OpenAIUsageResponse: Decodable {
         let usedPercent: Double
         /// Unix epoch seconds.
         let resetAt: Double?
-        /// The window's length: 18000 for the 5-hour window, 604800 for the 7-day one.
+        /// The window's length in seconds (the spike saw 18000 for 5 hours, 604800 for 7 days).
         let limitWindowSeconds: Double?
         enum CodingKeys: String, CodingKey {
             case usedPercent = "used_percent"

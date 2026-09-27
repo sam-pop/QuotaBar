@@ -48,10 +48,13 @@ struct ThresholdTracker {
 
     /// Records the latest percentages for both windows and returns any thresholds newly
     /// crossed this call. A window that has dropped below the lowest threshold is re-armed.
-    /// A nil 5-hour percent (no such window) records nothing for that window.
+    /// A nil 5-hour percent (no such window) fires nothing for that window and re-arms it.
     mutating func record(fiveHour: Int?, sevenDay: Int) -> [Crossing] {
-        (fiveHour.map { record(window: .fiveHour, percent: $0) } ?? [])
-            + record(window: .sevenDay, percent: sevenDay)
+        guard let fiveHour else {
+            fired[.fiveHour] = []
+            return record(window: .sevenDay, percent: sevenDay)
+        }
+        return record(window: .fiveHour, percent: fiveHour) + record(window: .sevenDay, percent: sevenDay)
     }
 
     private mutating func record(window: Window, percent: Int) -> [Crossing] {

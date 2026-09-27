@@ -3,7 +3,7 @@ import Foundation
 // MARK: - API Response (Codable)
 
 struct UsageResponse: Codable {
-    /// Nil when the account has no 5-hour window (some OpenAI plans are weekly-only). The
+    /// Nil when the account has no 5-hour window (reported for some ChatGPT plans). The
     /// Anthropic fetch rejects a response without it.
     let fiveHour: UsagePeriod?
     let sevenDay: UsagePeriod
