@@ -18,7 +18,6 @@ struct UsageSnapshotTests {
         // Rounding: 42.4 -> 42, 87.6 -> 88
         #expect(snapshot.fiveHourPercent == 42)
         #expect(snapshot.sevenDayPercent == 88)
-        #expect(snapshot.higherPercent == 88)
 
         // Fractional-seconds ISO8601 parses to a concrete Date.
         let fiveHourReset = try #require(snapshot.fiveHourResetsAt)
@@ -73,5 +72,56 @@ struct UsageSnapshotTests {
         let expected = try #require(formatter.date(from: "2026-07-09T12:00:00Z"))
         #expect(abs(fiveHourReset.timeIntervalSince(expected)) < 1)
         #expect(snapshot.sevenDayResetsAt != nil)
+    }
+
+    @Test("A snapshot with no 5-hour window has no 5-hour effective percent and round-trips")
+    func noFiveHourWindow() throws {
+        let snapshot = UsageSnapshot(
+            fiveHourPercent: nil, sevenDayPercent: 40,
+            fiveHourResetsAt: nil, sevenDayResetsAt: nil,
+            fetchedAt: Date(timeIntervalSince1970: 0)
+        )
+        #expect(snapshot.fiveHourEffectivePercent(now: Date(timeIntervalSince1970: 0)) == nil)
+        let decoded = try JSONDecoder().decode(UsageSnapshot.self, from: JSONEncoder().encode(snapshot))
+        #expect(decoded.fiveHourPercent == nil)
+        #expect(decoded.sevenDayPercent == 40)
+    }
+
+    @Test("Snapshots and history persisted before the 5-hour window became optional still decode")
+    func legacyPersistedJSONDecodes() throws {
+        let snapshotJSON = #"{"fiveHourPercent":42,"sevenDayPercent":17,"fiveHourResetsAt":770000100,"sevenDayResetsAt":770600000,"fetchedAt":770000000}"#
+        let snapshot = try JSONDecoder().decode(UsageSnapshot.self, from: Data(snapshotJSON.utf8))
+        #expect(snapshot.fiveHourPercent == 42)
+        #expect(snapshot.fiveHourResetsAt == Date(timeIntervalSinceReferenceDate: 770_000_100))
+        #expect(snapshot.sevenDayPercent == 17)
+
+        let historyJSON = #"[{"timestamp":770000000,"fiveHourPercent":10,"sevenDayPercent":20}]"#
+        let history = try JSONDecoder().decode([UsageDataPoint].self, from: Data(historyJSON.utf8))
+        #expect(history.first?.fiveHourPercent == 10)
+        #expect(history.first?.sevenDayPercent == 20)
+    }
+}
+
+@Suite("UsageAPIService.decode")
+struct UsageAPIServiceDecodeTests {
+
+    @Test("An Anthropic response without five_hour is a decoding failure")
+    func missingFiveHourThrows() throws {
+        let body = #"{"seven_day":{"utilization":20,"resets_at":"2026-07-16T00:00:00Z"}}"#
+        let error = #expect(throws: UsageAPIError.self) {
+            try UsageAPIService.decode(Data(body.utf8))
+        }
+        guard case .decodingFailed = error else {
+            Issue.record("expected decodingFailed, got \(String(describing: error))")
+            return
+        }
+    }
+
+    @Test("An Anthropic response with both windows decodes")
+    func bothWindowsDecode() throws {
+        let body = #"{"five_hour":{"utilization":10,"resets_at":"2026-07-09T12:00:00Z"},"seven_day":{"utilization":20,"resets_at":"2026-07-16T00:00:00Z"}}"#
+        let response = try UsageAPIService.decode(Data(body.utf8))
+        #expect(response.fiveHour?.utilization == 10)
+        #expect(response.sevenDay.utilization == 20)
     }
 }

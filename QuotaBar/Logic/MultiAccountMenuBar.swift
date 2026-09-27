@@ -73,12 +73,16 @@ enum MultiAccountMenuBar {
         Set(providers).count > 1
     }
 
-    /// The per-account window tag ("5h"/"7d") to show beside each percent. Only meaningful
-    /// in **auto** mode, where each account independently picks its higher window and the
-    /// bare numbers would otherwise be incomparable. In an explicit 5h/7d mode every account
-    /// shows the same window, so no per-account tag is needed (`nil`).
+    /// The per-account window tag ("5h"/"7d") to show beside each percent. In **auto** mode
+    /// every account is tagged, since each independently picks its higher window and the bare
+    /// numbers would otherwise be incomparable. In fixed 5h mode only an account that fell
+    /// back to 7d (it has no 5-hour window) is tagged, so its number isn't read as a 5h one.
+    /// Fixed 7d mode and `.bars` (which labels its own rows) get no tag (`nil`).
     static func windowTag(mode: MenuBarDisplayMode, window: MenuBarDisplayMode) -> String? {
-        guard mode == .auto else { return nil }
-        return window == .fiveHour ? "5h" : "7d"
+        switch mode {
+        case .auto:     return window == .fiveHour ? "5h" : "7d"
+        case .fiveHour: return window == .sevenDay ? "7d" : nil
+        case .sevenDay, .bars: return nil
+        }
     }
 }

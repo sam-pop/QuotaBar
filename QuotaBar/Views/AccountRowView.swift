@@ -135,8 +135,10 @@ struct AccountRowView: View {
 
     private func usageSections(_ snapshot: UsageSnapshot) -> some View {
         VStack(spacing: 10) {
-            UsageSectionView(title: "5-Hour Window", percent: snapshot.fiveHourPercent,
-                             resetsAt: snapshot.fiveHourResetsAt)
+            if let fiveHourPercent = snapshot.fiveHourPercent {
+                UsageSectionView(title: "5-Hour Window", percent: fiveHourPercent,
+                                 resetsAt: snapshot.fiveHourResetsAt)
+            }
             UsageSectionView(title: "7-Day Window", percent: snapshot.sevenDayPercent,
                              resetsAt: snapshot.sevenDayResetsAt)
         }

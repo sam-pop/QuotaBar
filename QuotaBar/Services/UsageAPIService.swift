@@ -71,10 +71,25 @@ enum UsageAPIService {
             throw UsageAPIError.invalidResponse(httpResponse.statusCode)
         }
 
+        return try decode(data)
+    }
+
+    /// `UsageResponse.fiveHour` is optional for OpenAI's weekly-only plans; an Anthropic
+    /// response without it stays a decode failure, as it was when the field was required.
+    static func decode(_ data: Data) throws -> UsageResponse {
+        let response: UsageResponse
         do {
-            return try JSONDecoder().decode(UsageResponse.self, from: data)
+            response = try JSONDecoder().decode(UsageResponse.self, from: data)
         } catch {
             throw UsageAPIError.decodingFailed(error)
         }
+        guard response.fiveHour != nil else {
+            throw UsageAPIError.decodingFailed(MissingFiveHour())
+        }
+        return response
+    }
+
+    private struct MissingFiveHour: LocalizedError {
+        var errorDescription: String? { "Usage response had no five_hour window" }
     }
 }

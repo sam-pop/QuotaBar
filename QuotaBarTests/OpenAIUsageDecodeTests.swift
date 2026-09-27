@@ -16,7 +16,7 @@ struct OpenAIUsageDecodeTests {
     func mapsWindows() throws {
         let decoded = try OpenAIUsage.decode(Data(fixture.utf8))
         let response = try OpenAIUsage.usageResponse(from: decoded)
-        #expect(response.fiveHour.utilization == 52)
+        #expect(response.fiveHour?.utilization == 52)
         #expect(response.sevenDay.utilization == 52.6)
         #expect(response.limits == nil)
         // The synthesized ISO strings must round-trip through UsageSnapshot's parser to the
@@ -35,16 +35,58 @@ struct OpenAIUsageDecodeTests {
         #expect(identity == AccountIdentity(uuid: "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d", email: "sam@example.com", displayName: nil))
     }
 
-    @Test("A missing secondary window becomes 0% with no reset; a missing primary window is a decode failure")
+    @Test("A weekly-only account (one window, longer than a day) maps it to seven_day and has no five_hour")
+    func weeklyOnly() throws {
+        let weeklyOnly = #"{"account_id":"a","rate_limit":{"primary_window":{"used_percent":30,"limit_window_seconds":604800,"reset_at":1789328604},"secondary_window":null}}"#
+        let response = try OpenAIUsage.usageResponse(from: try OpenAIUsage.decode(Data(weeklyOnly.utf8)))
+        #expect(response.fiveHour == nil)
+        #expect(response.sevenDay.utilization == 30)
+        let snapshot = UsageSnapshot(from: response)
+        #expect(snapshot.fiveHourPercent == nil)
+        #expect(snapshot.fiveHourResetsAt == nil)
+        #expect(snapshot.sevenDayPercent == 30)
+        #expect(snapshot.sevenDayResetsAt == Date(timeIntervalSince1970: 1_789_328_604))
+    }
+
+    @Test("The one window longer than a day is seven_day even when it arrives as primary")
+    func weeklyPrimaryIsSevenDay() throws {
+        let swapped = #"{"account_id":"a","rate_limit":{"primary_window":{"used_percent":70,"limit_window_seconds":604800,"reset_at":1789328604},"secondary_window":{"used_percent":20,"limit_window_seconds":18000,"reset_at":1788845315}}}"#
+        let response = try OpenAIUsage.usageResponse(from: try OpenAIUsage.decode(Data(swapped.utf8)))
+        #expect(response.fiveHour?.utilization == 20)
+        #expect(response.sevenDay.utilization == 70)
+    }
+
+    @Test("Without exactly one window longer than a day, windows map by position")
+    func positionalFallback() throws {
+        let bothShort = #"{"account_id":"a","rate_limit":{"primary_window":{"used_percent":10,"limit_window_seconds":18000},"secondary_window":{"used_percent":20,"limit_window_seconds":3600}}}"#
+        let short = try OpenAIUsage.usageResponse(from: try OpenAIUsage.decode(Data(bothShort.utf8)))
+        #expect(short.fiveHour?.utilization == 10)
+        #expect(short.sevenDay.utilization == 20)
+
+        let bothLong = #"{"account_id":"a","rate_limit":{"primary_window":{"used_percent":10,"limit_window_seconds":604800},"secondary_window":{"used_percent":20,"limit_window_seconds":2592000}}}"#
+        let long = try OpenAIUsage.usageResponse(from: try OpenAIUsage.decode(Data(bothLong.utf8)))
+        #expect(long.fiveHour?.utilization == 10)
+        #expect(long.sevenDay.utilization == 20)
+    }
+
+    @Test("Missing windows: no secondary reads 0% with no reset; no primary leaves five_hour empty; neither is a decode failure")
     func missingWindows() throws {
         let noSecondary = #"{"account_id":"a","rate_limit":{"primary_window":{"used_percent":10,"reset_at":1788845315},"secondary_window":null}}"#
         let response = try OpenAIUsage.usageResponse(from: try OpenAIUsage.decode(Data(noSecondary.utf8)))
+        #expect(response.fiveHour?.utilization == 10)
         #expect(response.sevenDay.utilization == 0)
         #expect(UsageSnapshot(from: response).sevenDayResetsAt == nil)
 
         let noPrimary = #"{"account_id":"a","rate_limit":{"secondary_window":{"used_percent":10,"reset_at":1}}}"#
-        #expect(throws: UsageAPIError.self) {
-            try OpenAIUsage.usageResponse(from: try OpenAIUsage.decode(Data(noPrimary.utf8)))
+        let secondaryOnly = try OpenAIUsage.usageResponse(from: try OpenAIUsage.decode(Data(noPrimary.utf8)))
+        #expect(secondaryOnly.fiveHour == nil)
+        #expect(secondaryOnly.sevenDay.utilization == 10)
+        #expect(UsageSnapshot(from: secondaryOnly).sevenDayResetsAt == Date(timeIntervalSince1970: 1))
+
+        for noWindows in [#"{"account_id":"a","rate_limit":{"primary_window":null}}"#, #"{"account_id":"a"}"#] {
+            #expect(throws: UsageAPIError.self) {
+                try OpenAIUsage.usageResponse(from: try OpenAIUsage.decode(Data(noWindows.utf8)))
+            }
         }
     }
 

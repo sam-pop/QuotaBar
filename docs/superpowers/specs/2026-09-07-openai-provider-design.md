@@ -101,7 +101,7 @@ The seam continues to return `UsageResponse`; the runtime keeps calling `UsageSn
 - `sevenDay` likewise from `secondary_window`; if it is absent/null (not observed; defensive), `utilization: 0` and `resetsAt: ""` (parses to nil). This renders as a truthful-looking "7-Day 0%", accepted for a case that has not been seen.
 - `limits: nil`.
 - Formatting an epoch to an ISO-8601 string that `UsageSnapshot` immediately re-parses is deliberate: three lines inside the adapter versus a `UsageSnapshot`-returning seam that changes 20 test sites and moves `fetchedAt` out of the runtime's control. Documented at the call site.
-- Window-length assumption: primary is treated as the 5-hour row and secondary as the 7-day row without checking `limit_window_seconds`. Documented; revisit if OpenAI changes windows.
+- Window classification (revised 2026-09-27, weekly-only plans): when exactly one window has `limit_window_seconds` > 1 day it is the 7-day row and the other, if any, the 5-hour row; a plan without a 5-hour window leaves `fiveHour` nil and the UI omits it. Otherwise positional (primary → 5-hour, secondary → 7-day). Both-weekly or a lone short secondary window still map by position (not observed; accepted).
 
 ### 5.4 Endpoints and login models
 

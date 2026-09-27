@@ -3,7 +3,9 @@ import Foundation
 // MARK: - API Response (Codable)
 
 struct UsageResponse: Codable {
-    let fiveHour: UsagePeriod
+    /// Nil when the account has no 5-hour window (reported for some ChatGPT plans). The
+    /// Anthropic fetch rejects a response without it.
+    let fiveHour: UsagePeriod?
     let sevenDay: UsagePeriod
     /// Newer, richer limit list. Model-scoped entries (e.g. Fable) live here; absent on
     /// older API responses, so optional.
@@ -15,7 +17,7 @@ struct UsageResponse: Codable {
         case limits
     }
 
-    init(fiveHour: UsagePeriod, sevenDay: UsagePeriod, limits: [UsageLimitDTO]? = nil) {
+    init(fiveHour: UsagePeriod?, sevenDay: UsagePeriod, limits: [UsageLimitDTO]? = nil) {
         self.fiveHour = fiveHour
         self.sevenDay = sevenDay
         self.limits = limits
@@ -66,7 +68,8 @@ struct ModelLimit: Codable, Equatable, Identifiable {
 // MARK: - View-ready model
 
 struct UsageSnapshot: Codable {
-    let fiveHourPercent: Int
+    /// Nil when the account has no 5-hour window.
+    let fiveHourPercent: Int?
     let sevenDayPercent: Int
     let fiveHourResetsAt: Date?
     let sevenDayResetsAt: Date?
@@ -74,10 +77,6 @@ struct UsageSnapshot: Codable {
     /// Per-model limits (e.g. Fable). Optional so snapshots persisted before this field
     /// existed still decode.
     let modelLimits: [ModelLimit]?
-
-    var higherPercent: Int {
-        max(fiveHourPercent, sevenDayPercent)
-    }
 
     /// A usage window resets to 0 the instant its `resetsAt` passes. Until the next refresh
     /// reports the fresh window, the cached percent is stale — so once `now` reaches the
@@ -88,15 +87,15 @@ struct UsageSnapshot: Codable {
         return now >= resetsAt ? 0 : percent
     }
 
-    func fiveHourEffectivePercent(now: Date = Date()) -> Int {
-        Self.effectivePercent(fiveHourPercent, resetsAt: fiveHourResetsAt, now: now)
+    func fiveHourEffectivePercent(now: Date = Date()) -> Int? {
+        fiveHourPercent.map { Self.effectivePercent($0, resetsAt: fiveHourResetsAt, now: now) }
     }
 
     func sevenDayEffectivePercent(now: Date = Date()) -> Int {
         Self.effectivePercent(sevenDayPercent, resetsAt: sevenDayResetsAt, now: now)
     }
 
-    init(fiveHourPercent: Int, sevenDayPercent: Int, fiveHourResetsAt: Date?, sevenDayResetsAt: Date?, fetchedAt: Date, modelLimits: [ModelLimit]? = nil) {
+    init(fiveHourPercent: Int?, sevenDayPercent: Int, fiveHourResetsAt: Date?, sevenDayResetsAt: Date?, fetchedAt: Date, modelLimits: [ModelLimit]? = nil) {
         self.fiveHourPercent = fiveHourPercent
         self.sevenDayPercent = sevenDayPercent
         self.fiveHourResetsAt = fiveHourResetsAt
@@ -107,9 +106,9 @@ struct UsageSnapshot: Codable {
 
     init(from response: UsageResponse) {
         self.init(
-            fiveHourPercent: Int(response.fiveHour.utilization.rounded()),
+            fiveHourPercent: response.fiveHour.map { Int($0.utilization.rounded()) },
             sevenDayPercent: Int(response.sevenDay.utilization.rounded()),
-            fiveHourResetsAt: Self.parseISO8601(response.fiveHour.resetsAt),
+            fiveHourResetsAt: response.fiveHour.flatMap { Self.parseISO8601($0.resetsAt) },
             sevenDayResetsAt: Self.parseISO8601(response.sevenDay.resetsAt),
             fetchedAt: Date(),
             modelLimits: Self.extractModelLimits(from: response.limits)
@@ -180,6 +179,6 @@ enum MenuBarDisplayMode: String, Codable, CaseIterable {
 
 struct UsageDataPoint: Codable {
     let timestamp: Date
-    let fiveHourPercent: Int
+    let fiveHourPercent: Int?
     let sevenDayPercent: Int
 }
