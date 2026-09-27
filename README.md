@@ -63,7 +63,7 @@ Each account is identified by its provider account ID (Anthropic: the OAuth prof
 
 In the popover, each account has a **✎** to rename it and set a custom **menu-bar prefix** (the `P` / `W` letters — override with anything, e.g. `Me` or `🏠`), and a **🗑** to remove it. Prefixes are auto-derived from labels and de-duplicated when they'd collide.
 
-**Note on the menu bar with 2+ accounts:** the bar shows each account's percentage but drops the reset countdown to stay compact — open the popover for full countdowns, progress bars, and sparklines per account. In **Auto** mode each account independently picks its higher window, so the bar tags each percentage with `5h` or `7d` to keep the numbers comparable.
+**Note on the menu bar with 2+ accounts:** the bar shows each account's percentage but drops the reset countdown to stay compact — open the popover for full countdowns, progress bars, and sparklines per account. In **Auto** mode each account independently picks its higher window, so the bar tags each percentage with `5h` or `7d` to keep the numbers comparable. In **5h** mode, an account with no 5-hour window (some ChatGPT plans) shows its 7-day number tagged `7d`.
 
 ### Per-model limits
 
@@ -83,7 +83,7 @@ When the API reports model-scoped weekly limits (e.g. **Fable**), the popover sh
 
 The browser's current ChatGPT session decides which account signs in. To add a **second** OpenAI account, use **Copy link** on the waiting pill and open it in a browser profile signed into that account.
 
-OpenAI shows a 5-hour and a weekly window, which land on the same rows as Claude's. OpenAI does not report a login expiry, so OpenAI accounts show no "login expires in" countdown; a login that stops refreshing gets the same red **Log in again** pill.
+OpenAI shows a 5-hour and a weekly window, which land on the same rows as Claude's. Some ChatGPT plans have only the weekly limit; for those accounts the app shows just the 7-day window — no 5-hour section in the popover, a `—` in the 5-Hour row of the comparison view, and the menu bar shows the 7-day number with a `7d` tag. OpenAI does not report a login expiry, so OpenAI accounts show no "login expires in" countdown; a login that stops refreshing gets the same red **Log in again** pill.
 
 When your accounts span both providers, the menu bar marks each one with its provider's logo (Claude in its brand orange, OpenAI monochrome; never tinted by usage level) instead of a dot, and each column in the popover gets a provider chip. With one provider, nothing changes.
 
@@ -141,7 +141,7 @@ auth.openai.com                     │
 | **Browser sign-in** | Authorization-code + PKCE login straight to claude.ai or auth.openai.com; no Claude Code CLI needed |
 | **Multiple accounts** | Track 1+ accounts, each signed in and refreshing independently; deduped by provider account ID |
 | **Per-model limits** | Model-scoped weekly caps (e.g. Fable) shown per account in the popover |
-| **Auto-mode window tags** | With 2+ accounts, the bar tags each percent `5h`/`7d` so mixed windows stay comparable |
+| **Window tags** | With 2+ accounts, the bar tags each percent `5h`/`7d` so mixed windows stay comparable (Auto mode, or an account with no 5-hour window) |
 | **Per-account, per-window notifications** | Separate alerts per account for the 5-hour and 7-day windows, e.g. "Work: 5-hour window at 82%" |
 | **Configurable thresholds** | Defaults to 80% and 90%; override via `defaults` (see below) |
 | **Single-item Keychain store** | All accounts in one app-owned Keychain item; verified writes never clobber other accounts |
