@@ -191,11 +191,14 @@ enum MenuBarImage {
             .font: NSFont.systemFont(ofSize: 9, weight: .semibold), .foregroundColor: NSColor.labelColor,
         ]
         let rowLabelAttrs: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: 7, weight: .medium), .foregroundColor: NSColor.tertiaryLabelColor,
+            .font: NSFont.systemFont(ofSize: 7, weight: .semibold),
+            .foregroundColor: NSColor.labelColor,
         ]
         let numAttrs: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedDigitSystemFont(ofSize: 8, weight: .medium),
-            .foregroundColor: NSColor.secondaryLabelColor,
+            // Tiny numerals need the primary foreground, including on the highlighted
+            // menu-bar background; secondary text becomes hard to read over its tint.
+            .font: NSFont.monospacedDigitSystemFont(ofSize: 9, weight: .semibold),
+            .foregroundColor: NSColor.labelColor,
         ]
 
         let mixed = MultiAccountMenuBar.providerShapes(for: accounts.map(\.provider))
@@ -269,7 +272,7 @@ enum MenuBarImage {
                     rx += labelW + gap
 
                     let track = NSRect(x: rx, y: cy - barH / 2, width: barW, height: barH)
-                    NSColor.tertiaryLabelColor.withAlphaComponent(0.28).setFill()
+                    NSColor.labelColor.withAlphaComponent(0.22).setFill()
                     NSBezierPath(roundedRect: track, xRadius: barH / 2, yRadius: barH / 2).fill()
                     if let pct, pct > 0 {
                         let w = max(barW * CGFloat(min(pct, 100)) / 100, barH)
@@ -277,6 +280,12 @@ enum MenuBarImage {
                         NSBezierPath(roundedRect: NSRect(x: rx, y: cy - barH / 2, width: w, height: barH),
                                      xRadius: barH / 2, yRadius: barH / 2).fill()
                     }
+                    // Keep the gauge boundary visible even for empty or low-usage bars.
+                    NSColor.labelColor.withAlphaComponent(0.45).setStroke()
+                    let outline = NSBezierPath(roundedRect: track.insetBy(dx: 0.25, dy: 0.25),
+                                               xRadius: barH / 2, yRadius: barH / 2)
+                    outline.lineWidth = 0.5
+                    outline.stroke()
                     rx += barW + gap
                     let numStr = NSAttributedString(string: num, attributes: numAttrs)
                     numStr.draw(at: NSPoint(x: rx, y: cy - numStr.size().height / 2))
