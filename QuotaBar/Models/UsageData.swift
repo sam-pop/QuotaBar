@@ -26,7 +26,7 @@ struct UsageResponse: Codable {
 
 struct UsagePeriod: Codable {
     let utilization: Double
-    let resetsAt: String
+    let resetsAt: String?
 
     enum CodingKeys: String, CodingKey {
         case utilization
@@ -108,8 +108,8 @@ struct UsageSnapshot: Codable {
         self.init(
             fiveHourPercent: response.fiveHour.map { Int($0.utilization.rounded()) },
             sevenDayPercent: Int(response.sevenDay.utilization.rounded()),
-            fiveHourResetsAt: response.fiveHour.flatMap { Self.parseISO8601($0.resetsAt) },
-            sevenDayResetsAt: Self.parseISO8601(response.sevenDay.resetsAt),
+            fiveHourResetsAt: response.fiveHour?.resetsAt.flatMap(Self.parseISO8601),
+            sevenDayResetsAt: response.sevenDay.resetsAt.flatMap(Self.parseISO8601),
             fetchedAt: Date(),
             modelLimits: Self.extractModelLimits(from: response.limits)
         )

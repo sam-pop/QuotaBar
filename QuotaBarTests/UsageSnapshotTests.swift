@@ -117,6 +117,17 @@ struct UsageAPIServiceDecodeTests {
         }
     }
 
+    @Test("An unused Anthropic session with a null reset still loads both limits")
+    func nullResetDecodes() throws {
+        let body = #"{"five_hour":{"utilization":0,"resets_at":null},"seven_day":{"utilization":12,"resets_at":"2026-11-02T20:00:00+00:00"}}"#
+        let response = try UsageAPIService.decode(Data(body.utf8))
+        let snapshot = UsageSnapshot(from: response)
+        #expect(snapshot.fiveHourPercent == 0)
+        #expect(snapshot.fiveHourResetsAt == nil)
+        #expect(snapshot.sevenDayPercent == 12)
+        #expect(snapshot.sevenDayResetsAt != nil)
+    }
+
     @Test("An Anthropic response with both windows decodes")
     func bothWindowsDecode() throws {
         let body = #"{"five_hour":{"utilization":10,"resets_at":"2026-07-09T12:00:00Z"},"seven_day":{"utilization":20,"resets_at":"2026-07-16T00:00:00Z"}}"#
