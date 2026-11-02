@@ -202,18 +202,20 @@ enum MenuBarImage {
         // `shape` is nil unless providers are mixed; the mark keeps its own color — the
         // bars already carry severity.
         struct Cluster {
-            let prefix: String; let p5: Int?; let p7: Int?; let num5: String; let num7: String
+            let prefix: String; let topLabel: String; let p5: Int?; let p7: Int?; let num5: String; let num7: String
             let shape: ProviderShape?
         }
         let clusters: [Cluster] = zip(prefixes, accounts).map { prefix, account in
             let shape = mixed ? ProviderShape.mark(for: account.provider, mixed: true) : nil
             guard let s = snapshots[account.id] else {
-                return Cluster(prefix: prefix, p5: nil, p7: nil, num5: "--", num7: "--", shape: shape)
+                return Cluster(prefix: prefix, topLabel: "5h", p5: nil, p7: nil, num5: "--", num7: "--", shape: shape)
             }
-            let p5 = s.fiveHourEffectivePercent(now: now)
+            // No 5-hour window: the top row shows a model limit (e.g. Fable) if there is one,
+            // else stays an empty 5h row, drawn like the no-snapshot case.
+            let top = MultiAccountMenuBar.barsTopRow(s, now: now)
             let p7 = s.sevenDayEffectivePercent(now: now)
-            // No 5-hour window: an empty 5h row, drawn like the no-snapshot case.
-            return Cluster(prefix: prefix, p5: p5, p7: p7, num5: p5.map { "\($0)%" } ?? "--", num7: "\(p7)%", shape: shape)
+            return Cluster(prefix: prefix, topLabel: top.label, p5: top.percent, p7: p7,
+                           num5: top.percent.map { "\($0)%" } ?? "--", num7: "\(p7)%", shape: shape)
         }
 
         let barW: CGFloat = 26, barH: CGFloat = 4.5
@@ -281,7 +283,7 @@ enum MenuBarImage {
                     let numStr = NSAttributedString(string: num, attributes: numAttrs)
                     numStr.draw(at: NSPoint(x: rx, y: cy - numStr.size().height / 2))
                 }
-                drawRow("5h", pct: c.p5, num: c.num5, cy: rowCenterTop)
+                drawRow(c.topLabel, pct: c.p5, num: c.num5, cy: rowCenterTop)
                 drawRow("7d", pct: c.p7, num: c.num7, cy: rowCenterBot)
                 x = clusterX + labelW + gap + barW + gap + numW(c)
             }

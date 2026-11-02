@@ -78,4 +78,40 @@ struct MultiAccountMenuBarTests {
         #expect(MultiAccountMenuBar.windowTag(mode: .bars, window: .fiveHour) == nil)
         #expect(MultiAccountMenuBar.windowTag(mode: .bars, window: .sevenDay) == nil)
     }
+
+    // MARK: - Bars top row
+
+    private func snap(fiveHour: Int?, limits: [ModelLimit]? = nil) -> UsageSnapshot {
+        UsageSnapshot(fiveHourPercent: fiveHour, sevenDayPercent: 10,
+                      fiveHourResetsAt: nil, sevenDayResetsAt: nil, fetchedAt: Date(), modelLimits: limits)
+    }
+
+    @Test("Bars top row is the 5-hour window when the account has one, even with a model limit")
+    func barsTopRowPrefersFiveHour() {
+        let s = snap(fiveHour: 40, limits: [ModelLimit(modelName: "Fable", percent: 90, resetsAt: nil, severity: nil)])
+        let row = MultiAccountMenuBar.barsTopRow(s)
+        #expect(row.label == "5h")
+        #expect(row.percent == 40)
+    }
+
+    @Test("No 5-hour window: Bars top row shows the highest model limit, labeled by its initial")
+    func barsTopRowFallsBackToModelLimit() {
+        let now = Date()
+        let s = snap(fiveHour: nil, limits: [
+            ModelLimit(modelName: "Fable", percent: 6, resetsAt: now.addingTimeInterval(3600), severity: nil),
+            ModelLimit(modelName: "Opus", percent: 3, resetsAt: nil, severity: nil),
+            // Past its reset: effectively 0, so it must not win on its stale 99.
+            ModelLimit(modelName: "Haiku", percent: 99, resetsAt: now.addingTimeInterval(-60), severity: nil),
+        ])
+        let row = MultiAccountMenuBar.barsTopRow(s, now: now)
+        #expect(row.label == "F")
+        #expect(row.percent == 6)
+    }
+
+    @Test("No 5-hour window and no model limits: an empty 5h row")
+    func barsTopRowEmpty() {
+        let row = MultiAccountMenuBar.barsTopRow(snap(fiveHour: nil))
+        #expect(row.label == "5h")
+        #expect(row.percent == nil)
+    }
 }

@@ -85,4 +85,16 @@ enum MultiAccountMenuBar {
         case .sevenDay, .bars: return nil
         }
     }
+
+    /// The top row of an account's Bars cluster: its 5-hour window, or — when it has none —
+    /// its highest per-model limit (e.g. Fable), labeled by the model's initial. Nil percent
+    /// means an empty "5h" row.
+    static func barsTopRow(_ s: UsageSnapshot, now: Date = Date()) -> (label: String, percent: Int?) {
+        if let p5 = s.fiveHourEffectivePercent(now: now) { return ("5h", p5) }
+        let top = (s.modelLimits ?? [])
+            .map { ($0.modelName, UsageSnapshot.effectivePercent($0.percent, resetsAt: $0.resetsAt, now: now)) }
+            .max { $0.1 < $1.1 }
+        guard let (name, percent) = top, let initial = name.first else { return ("5h", nil) }
+        return (String(initial).uppercased(), percent)
+    }
 }
