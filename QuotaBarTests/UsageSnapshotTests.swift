@@ -120,6 +120,17 @@ struct UsageAPIServiceDecodeTests {
         #expect(snapshot.sevenDayPercent == 20)
     }
 
+    /// Captured live (trimmed): a 5-hour window whose session hasn't started has a null
+    /// `resets_at`. Requiring the string failed the whole decode and froze the account.
+    @Test("A window with a null resets_at decodes with no reset date")
+    func nullResetsAtDecodes() throws {
+        let body = #"{"five_hour":{"utilization":0.0,"resets_at":null,"limit_dollars":null},"seven_day":{"utilization":0.0,"resets_at":"2026-11-07T08:00:00+00:00"}}"#
+        let snapshot = UsageSnapshot(from: try UsageAPIService.decode(Data(body.utf8)))
+        #expect(snapshot.fiveHourPercent == 0)
+        #expect(snapshot.fiveHourResetsAt == nil)
+        #expect(snapshot.sevenDayResetsAt != nil)
+    }
+
     @Test("An Anthropic response with both windows decodes")
     func bothWindowsDecode() throws {
         let body = #"{"five_hour":{"utilization":10,"resets_at":"2026-07-09T12:00:00Z"},"seven_day":{"utilization":20,"resets_at":"2026-07-16T00:00:00Z"}}"#
