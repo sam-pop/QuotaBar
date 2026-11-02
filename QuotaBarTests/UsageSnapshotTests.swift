@@ -105,16 +105,19 @@ struct UsageSnapshotTests {
 @Suite("UsageAPIService.decode")
 struct UsageAPIServiceDecodeTests {
 
-    @Test("An Anthropic response without five_hour is a decoding failure")
-    func missingFiveHourThrows() throws {
-        let body = #"{"seven_day":{"utilization":20,"resets_at":"2026-07-16T00:00:00Z"}}"#
-        let error = #expect(throws: UsageAPIError.self) {
-            try UsageAPIService.decode(Data(body.utf8))
-        }
-        guard case .decodingFailed = error else {
-            Issue.record("expected decodingFailed, got \(String(describing: error))")
-            return
-        }
+    /// Anthropic dropped the 5-hour window for some plans; rejecting the response froze those
+    /// accounts on their last snapshot ("Stale") forever.
+    @Test("An Anthropic response without five_hour (missing or null) decodes as weekly-only",
+          arguments: [
+            #"{"seven_day":{"utilization":20,"resets_at":"2026-07-16T00:00:00Z"}}"#,
+            #"{"five_hour":null,"seven_day":{"utilization":20,"resets_at":"2026-07-16T00:00:00Z"}}"#,
+          ])
+    func missingFiveHourDecodes(body: String) throws {
+        let response = try UsageAPIService.decode(Data(body.utf8))
+        #expect(response.fiveHour == nil)
+        let snapshot = UsageSnapshot(from: response)
+        #expect(snapshot.fiveHourPercent == nil)
+        #expect(snapshot.sevenDayPercent == 20)
     }
 
     @Test("An Anthropic response with both windows decodes")

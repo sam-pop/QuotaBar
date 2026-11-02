@@ -63,7 +63,7 @@ Each account is identified by its provider account ID (Anthropic: the OAuth prof
 
 In the popover, each account has a **✎** to rename it and set a custom **menu-bar prefix** (the `P` / `W` letters — override with anything, e.g. `Me` or `🏠`), and a **🗑** to remove it. Prefixes are auto-derived from labels and de-duplicated when they'd collide.
 
-**Note on the menu bar with 2+ accounts:** the bar shows each account's percentage but drops the reset countdown to stay compact — open the popover for full countdowns, progress bars, and sparklines per account. In **Auto** mode each account independently picks its higher window, so the bar tags each percentage with `5h` or `7d` to keep the numbers comparable. In **5h** mode, an account with no 5-hour window (some ChatGPT plans) shows its 7-day number tagged `7d`.
+**Note on the menu bar with 2+ accounts:** the bar shows each account's percentage but drops the reset countdown to stay compact — open the popover for full countdowns, progress bars, and sparklines per account. In **Auto** mode each account independently picks its higher window, so the bar tags each percentage with `5h` or `7d` to keep the numbers comparable. In **5h** mode, an account with no 5-hour window (some ChatGPT and Claude plans) shows its 7-day number tagged `7d`.
 
 ### Per-model limits
 
