@@ -638,8 +638,7 @@ final class AccountsViewModel: ObservableObject {
         accountsStore.save(accounts)
         attachRuntime(for: account)
         await endLogin(.idle, for: nil)
-        notifyLoginSucceeded(accountID: account.id, owner: nil)
-        await runtimes[account.id]?.credentialsReplaced()
+        await fetchUsageAndNotifyLogin(accountID: account.id, owner: nil)
     }
 
     /// The shared tail of a login that landed on an existing account.
@@ -653,8 +652,7 @@ final class AccountsViewModel: ObservableObject {
         guard await storeGrant(grant, for: accountID, owner: owner) else { return }
         needsReAuth[accountID] = false
         await endLogin(notice.map(LoginState.notice) ?? .idle, for: owner)
-        notifyLoginSucceeded(accountID: accountID, owner: owner)
-        await runtimes[accountID]?.credentialsReplaced()
+        await fetchUsageAndNotifyLogin(accountID: accountID, owner: owner)
     }
 
     /// Stores a verified grant, or surfaces the one terminal failure a repeat login cannot
@@ -761,13 +759,27 @@ final class AccountsViewModel: ObservableObject {
         return (error as? URLError)?.code == .cancelled
     }
 
+    /// Runs the first usage fetch on a landed login's credentials, then tells the user how
+    /// it went. In this order so the notification can't promise tracking that just failed.
+    private func fetchUsageAndNotifyLogin(accountID: UUID, owner: UUID?) async {
+        await runtimes[accountID]?.credentialsReplaced()
+        notifyLoginSucceeded(accountID: accountID, owner: owner)
+    }
+
     /// The popover closes as soon as the browser takes focus, so a notification is the only
     /// way the user learns a login landed. `owner` is the flow it was started from, which
     /// differs from `accountID` when the login turned out to belong to another account.
+    /// An account removed during the first fetch is no longer there to announce.
     private func notifyLoginSucceeded(accountID: UUID, owner: UUID?) {
-        let label = accounts.first(where: { $0.id == accountID })?.label ?? "Account"
-        postLoginNotification(owner: owner, title: "\(label): logged in",
-                              body: "Usage tracking is active for this account.")
+        guard let runtime = runtimes[accountID],
+              let label = accounts.first(where: { $0.id == accountID })?.label else { return }
+        let body: String
+        if case .error = runtime.state {
+            body = "Usage couldn't load. QuotaBar will keep trying."
+        } else {
+            body = "Usage tracking is active for this account."
+        }
+        postLoginNotification(owner: owner, title: "\(label): logged in", body: body)
     }
 
     /// The same reason for a login that didn't land. Without this the user is left staring at

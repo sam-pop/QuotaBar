@@ -232,6 +232,8 @@ struct AccountsViewModelBrowserLoginTests {
         var exchangeResults: [Result<CachedCredentials, Error>] = []
         var identityResults: [Result<AccountIdentity, Error>] = []
         var usageResult: Result<UsageResponse, Error> = .failure(UsageAPIError.tokenExpired)
+        /// Holds each usage fetch open, so a test can act while one is in flight.
+        var usageDelay: Duration = .zero
 
         var beginCalls: [(accountID: UUID?, forcePaste: Bool, hint: String?)] = []
         var exchangeCount = 0
@@ -295,6 +297,7 @@ struct AccountsViewModelBrowserLoginTests {
                     fetchIdentity: { _ in try script.nextIdentity() },
                     fetchUsage: { token in
                         script.usageTokens.append(token)
+                        if script.usageDelay > .zero { try? await Task.sleep(for: script.usageDelay) }
                         return try script.usageResult.get()
                     },
                     refreshToken: { _ in throw StubError() }),
@@ -856,6 +859,104 @@ struct AccountsViewModelBrowserLoginTests {
         // One identifier per flow, so Notification Center replaces the first: "login didn't
         // finish" must not sit next to the "logged in" that followed it.
         #expect(Set(script.notifications.map(\.identifier)).count == 1)
+    }
+
+    // MARK: - Login notification reflects the first usage fetch
+
+    /// Not auth-shaped and not transient, so the runtime fails at once: no token refresh, no backoff.
+    private static let usageFailure = UsageAPIError.invalidResponse(400)
+
+    private func scriptWithLanding(accountUUID: String, name: String? = nil) -> Script {
+        let script = Script()
+        script.callbackCode = "auth-code"
+        script.exchangeResults = [.success(Self.freshCredentials)]
+        script.identityResults = [.success(identity(accountUUID, email: "a@example.com", name: name))]
+        return script
+    }
+
+    private func expectUsageFailureToast(_ script: Script, title: String, _ comment: Comment) {
+        #expect(script.notifications.count == 1, comment)
+        #expect(script.notifications.first?.content.title == title, comment)
+        #expect(script.notifications.first?.content.body.contains("couldn't load") == true, comment)
+        #expect(script.notifications.first?.content.body.contains("is active") == false, comment)
+    }
+
+    @Test("Re-login whose usage fetch fails says so instead of claiming tracking is active")
+    func reloginUsageFailureIsReported() async {
+        let script = scriptWithLanding(accountUUID: "acct-A")
+        script.usageResult = .failure(Self.usageFailure)
+        let account = Account(label: "Work", accountUUID: "acct-A")
+        let store = InMemoryAccountCredentialStore([account.id: Self.oldCredentials])
+        let vm = makeVM(script, accounts: [account], store: store)
+
+        await vm.beginLogin(account.id)
+
+        expectUsageFailureToast(script, title: "Work: logged in", "existing account, no prior snapshot")
+    }
+
+    @Test("A newly added account whose usage fetch fails says so too")
+    func addedAccountUsageFailureIsReported() async {
+        let script = scriptWithLanding(accountUUID: "acct-new", name: "New")
+        script.usageResult = .failure(Self.usageFailure)
+        let vm = makeVM(script, accounts: [], store: InMemoryAccountCredentialStore())
+
+        await vm.beginAddAccountLogin(provider: .anthropic)
+
+        expectUsageFailureToast(script, title: "New: logged in", "add-account path")
+    }
+
+    /// The prior good snapshot is the point of this fixture: "no data on screen" would pass
+    /// here if the failure were inferred from a missing snapshot rather than this fetch.
+    @Test("A failed fetch is reported even when the account still holds an older snapshot")
+    func usageFailureWithStaleSnapshotIsReported() async {
+        let script = scriptWithLanding(accountUUID: "acct-A")
+        script.usageResult = .success(usageResponse())
+        let account = Account(label: "Work", accountUUID: "acct-A")
+        let store = InMemoryAccountCredentialStore([account.id: Self.oldCredentials])
+        let vm = makeVM(script, accounts: [account], store: store)
+        await vm.refreshAll()
+        #expect(vm.snapshots[account.id] != nil)
+
+        script.usageResult = .failure(Self.usageFailure)
+        await vm.beginLogin(account.id)
+
+        expectUsageFailureToast(script, title: "Work: logged in", "older snapshot present")
+    }
+
+    /// The earlier failure is the point of this fixture: it fails if the outcome is read
+    /// before the login's own fetch has finished.
+    @Test("A login that repairs a failing account reports tracking as active")
+    func loginAfterFailureReportsActive() async {
+        let script = scriptWithLanding(accountUUID: "acct-A")
+        script.usageResult = .failure(Self.usageFailure)
+        let account = Account(label: "Work", accountUUID: "acct-A")
+        let store = InMemoryAccountCredentialStore([account.id: Self.oldCredentials])
+        let vm = makeVM(script, accounts: [account], store: store)
+        await vm.refreshAll()
+
+        script.usageResult = .success(usageResponse())
+        await vm.beginLogin(account.id)
+
+        #expect(script.notifications.count == 1)
+        #expect(script.notifications.first?.content.title == "Work: logged in")
+        #expect(script.notifications.first?.content.body == "Usage tracking is active for this account.")
+    }
+
+    @Test("An account removed while its first fetch runs gets no login notification")
+    func accountRemovedDuringFetchIsNotAnnounced() async throws {
+        let script = scriptWithLanding(accountUUID: "acct-A")
+        script.usageResult = .success(usageResponse())
+        script.usageDelay = .milliseconds(200)
+        let account = Account(label: "Work", accountUUID: "acct-A")
+        let store = InMemoryAccountCredentialStore([account.id: Self.oldCredentials])
+        let vm = makeVM(script, accounts: [account], store: store)
+
+        let login = Task { await vm.beginLogin(account.id) }
+        while !script.usageTokens.contains("fresh-token") { await Task.yield() }
+        await vm.remove(account.id)
+        await login.value
+
+        #expect(script.notifications.isEmpty)
     }
 
     @Test("An identity failure notifies too: it parks the login where nothing else can be started")
